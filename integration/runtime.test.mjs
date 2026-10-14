@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict'
-import { after, before, beforeEach, test } from 'node:test'
+import { after, before, beforeEach, mock, test } from 'node:test'
 
 import * as h from '../server/handlers.ts'
-import runtime from '../src/runtime.ts'
-import { crossBridge } from '../tests/support/bridge.mjs'
+import { SETTINGS_WATCH_MS } from '../src/runtime.ts'
+import { activate, dispose } from '../tests/support/host.mjs'
 import { TOKEN } from '../tests/support/fakeTodoist.mjs'
 import { seed } from '../tests/support/scenario.mjs'
 import { REAL_TD, startWorld } from '../tests/support/world.mjs'
@@ -21,59 +21,6 @@ before(async () => {
   s = seed(world.fake)
 })
 after(() => world.close())
-
-function host({ storage = {}, invoke } = {}) {
-  const state = {
-    published: [], requests: new Map(), commands: new Map(), notes: [], starts: 0, invokes: [],
-    // The user-facing setting is how the runtime points the service at td;
-    // tests point it at the pinned real binary.
-    storage: new Map(Object.entries({ 'todoist.tdPath': REAL_TD, ...storage })),
-    failNext: null,
-  }
-  const callService = async (name, params) => {
-    state.invokes.push(name)
-    if (state.failNext?.name === name) {
-      const error = state.failNext.error
-      state.failNext = null
-      throw error
-    }
-    const handler = invoke ?? ((n, p) => h.handlers[n](p))
-    return crossBridge(await handler(name, crossBridge(params, name)), name)
-  }
-  state.context = {
-    api: {
-      extension: { id: 'todoist', apiVersion: 2 },
-      storage: {
-        get: async key => structuredClone(state.storage.get(key)),
-        set: async (key, value) => { state.storage.set(key, crossBridge(value, 'storage.set')) },
-        delete: async key => { state.storage.delete(key) },
-        keys: async () => [...state.storage.keys()],
-      },
-      services: {
-        start: async () => { state.starts++; return { state: 'running', serviceId: 'todoist.td', pid: 1, endpoints: [] } },
-        invoke: async (_id, name, params) => callService(name, params),
-        stop: async () => {}, status: async () => ({ state: 'running' }), expose: async () => ({ lan: false }),
-      },
-      notifications: { show: async message => { state.notes.push(crossBridge(message, 'notifications.show')) } },
-      files: {}, net: {},
-    },
-    subscriptions: [],
-    registerCommand: (id, fn) => { state.commands.set(id, fn); return { dispose() {} } },
-    registerRequest: (name, fn) => { state.requests.set(name, fn); return { dispose() {} } },
-    views: { publish: async (viewId, value) => { state.published.push({ viewId, state: crossBridge(value, 'views.publish') }) } },
-  }
-  state.request = async (name, input) => crossBridge(await state.requests.get(name)(crossBridge(input, name), { id: 'todoist.main', instanceId: 'test' }), name)
-  state.last = viewId => state.published.filter(p => p.viewId === viewId).at(-1)?.state
-  return state
-}
-
-const activate = async options => {
-  const state = host(options)
-  await runtime.activate(state.context)
-  return state
-}
-
-const dispose = state => Promise.all(state.context.subscriptions.map(sub => sub.dispose()))
 
 beforeEach(async () => {
   world.fake.token = TOKEN
@@ -217,5 +164,177 @@ test('due-now toasts: once per task occurrence, only for timed tasks, only when 
     assert.ok(on.storage.get('todoist.announced').some(key => key.startsWith(timed.id)))
   } finally {
     await dispose(on)
+  }
+})
+
+// ---- runtime decisions with a scripted service --------------------------
+//
+// These cases are about what the runtime DOES with service answers (ordering,
+// identity, paging, timing), so the service is scripted: real td cannot be
+// made to answer status slowly for one account and quickly for another.
+
+const ready = (user, path = '/td/a') => ({ state: 'ready', td: { path, version: '5.4.10', node: null }, searched: [], brew: null, user: { id: user, email: `${user}@x`, fullName: user, readOnly: false }, job: null, error: null, checkedAt: 0 })
+const flush = async () => { for (let i = 0; i < 20; i++) await new Promise(r => setImmediate(r)) }
+const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+const timedRow = (id, at, content = id) => ({
+  id, content, description: '', priority: 1, projectId: 'p', sectionId: null, parentId: null, labels: [], order: 1, commentCount: 0, completedAt: null, url: '', deadline: null, duration: null,
+  due: { date: ymd(at), datetime: at.toISOString(), string: 'x', recurring: false },
+})
+
+test('switching td to another account reloads every view even though both are ready', async () => {
+  let user = 'A'
+  const state = await activate({ invoke: async name => (name === 'status' ? ready(user, `/td/${user}`) : { ok: true }) })
+  try {
+    await state.request('status', {})
+    const before = state.last('todoist.main').revision
+    user = 'B'
+    await state.request('setSetting', { key: 'todoist.tdPath', value: '/td/B' })
+    assert.equal(state.last('todoist.main').setup.user.id, 'B')
+    assert.ok(state.last('todoist.main').revision > before, 'A’s lists must not stay under B’s header')
+  } finally {
+    await dispose(state)
+  }
+})
+
+test('an older status answer arriving last does not overwrite the newer one', async () => {
+  let n = 0
+  const state = await activate({
+    invoke: async name => {
+      if (name !== 'status') return { ok: true }
+      const call = ++n
+      if (call === 1) { await new Promise(r => setTimeout(r, 300)); return ready('OLD') }
+      return ready('NEW')
+    },
+  })
+  try {
+    const slow = state.request('status', {})
+    await new Promise(r => setTimeout(r, 50))
+    await state.request('status', {})
+    await slow
+    assert.equal(state.last('todoist.main').setup.user.id, 'NEW')
+  } finally {
+    await dispose(state)
+  }
+})
+
+test('a td path changed on Agent Code’s Settings page re-locates td; a reminders toggle there takes effect', async () => {
+  mock.timers.enable({ apis: ['setInterval'] })
+  const statuses = []
+  const lists = []
+  const state = await activate({
+    invoke: async (name, params) => {
+      if (name === 'status') { statuses.push(params.tdPath); return ready('A', params.tdPath) }
+      if (name === 'list') { lists.push(params); return { tasks: [], nextCursor: null, truncated: false } }
+      return { ok: true }
+    },
+  })
+  try {
+    await state.request('status', {})
+    // Settings writes our storage directly; no request reaches the runtime.
+    state.storage.set('todoist.tdPath', '/opt/other/td')
+    state.storage.set('todoist.dueReminders', true)
+    mock.timers.tick(SETTINGS_WATCH_MS)
+    await flush()
+    assert.equal(statuses.at(-1), '/opt/other/td', 'the service was pointed at the new td')
+    assert.equal(state.last('todoist.main').settings.dueReminders, true)
+    assert.ok(lists.some(p => p.kind === 'today'), 'reminders started checking without a restart')
+  } finally {
+    mock.timers.reset()
+    await dispose(state)
+  }
+})
+
+test('due reminders read every page of Today, and only announce what is due now', async () => {
+  const now = Date.now()
+  const allDay = Array.from({ length: 120 }, (_, i) => ({ ...timedRow(`d${i}`, new Date(now)), due: { date: ymd(new Date(now)), datetime: null, string: 'today', recurring: false } }))
+  const pages = {
+    first: { tasks: [...allDay, timedRow('soon', new Date(now + 10 * 60_000), 'Not yet')], nextCursor: 'c2', truncated: false },
+    c2: { tasks: [timedRow('due', new Date(now - 60_000), 'Second page call')], nextCursor: null, truncated: false },
+  }
+  const state = await activate({
+    storage: { 'todoist.dueReminders': true },
+    invoke: async (name, params) => (name === 'status' ? ready('A') : name === 'list' ? pages[params.cursor ?? 'first'] : { ok: true }),
+  })
+  try {
+    for (let i = 0; i < 50 && !state.notes.length; i++) await new Promise(r => setTimeout(r, 50))
+    assert.deepEqual(state.notes, ['Due now: Second page call'])
+    assert.ok(!state.notes.some(n => n.includes('Not yet')), 'a task due in 10 minutes is not "due now"')
+  } finally {
+    await dispose(state)
+  }
+})
+
+test('a rescheduled task is announced again at its new time', async () => {
+  const now = Date.now()
+  let at = new Date(now - 60_000)
+  mock.timers.enable({ apis: ['setInterval'] })
+  const state = await activate({
+    storage: { 'todoist.dueReminders': true, 'todoist.reminderIntervalMinutes': 1 },
+    invoke: async name => (name === 'status' ? ready('A') : name === 'list' ? { tasks: [timedRow('r', at, 'Call')], nextCursor: null, truncated: false } : { ok: true }),
+  })
+  try {
+    await flush()
+    assert.equal(state.notes.length, 1)
+    mock.timers.tick(60_000)
+    await flush()
+    assert.equal(state.notes.length, 1, 'same occurrence: once')
+    at = new Date(now - 30_000) // moved by a few seconds = a new occurrence
+    mock.timers.tick(60_000)
+    await flush()
+    assert.equal(state.notes.length, 2)
+  } finally {
+    mock.timers.reset()
+    await dispose(state)
+  }
+})
+
+test('the "Open on" setting is passed through when valid', async () => {
+  const state = await activate({ storage: { 'todoist.defaultView': 'inbox' }, invoke: async name => (name === 'status' ? ready('A') : { ok: true }) })
+  try {
+    assert.equal(state.last('todoist.main').settings.defaultView, 'inbox')
+  } finally {
+    await dispose(state)
+  }
+})
+
+test('a read is not retried after a SLOW failure: the view’s own 30 s would run out', async () => {
+  let lists = 0
+  const state = await activate({
+    invoke: async name => {
+      if (name === 'status') return ready('A')
+      lists++
+      await new Promise(r => setTimeout(r, 2_500))
+      throw new Error('Service process exited (code 1).')
+    },
+  })
+  try {
+    await assert.rejects(state.request('list', { kind: 'today' }), /exited/)
+    assert.equal(lists, 1)
+  } finally {
+    await dispose(state)
+  }
+})
+
+test('a large reply crosses runtime and bridge in parts and arrives whole', async () => {
+  const many = Array.from({ length: 400 }, (_, i) => timedRow(`t${i}`, new Date()))
+  const parts = []
+  const state = await activate({
+    invoke: async (name, params) => {
+      // Run the real chunker on a reply too big for one message.
+      const { encodeReply, chunk } = await import('../server/invoke.ts')
+      if (name === 'status') return ready('A')
+      if (name === 'chunk') { parts.push(params.index); return chunk(params) }
+      return encodeReply({ tasks: many, nextCursor: 'n', truncated: false })
+    },
+  })
+  try {
+    const first = await state.request('list', { kind: 'today' })
+    assert.ok(first.chunked, 'the view receives the envelope')
+    const { collect } = await import('../src/shared/budget.ts')
+    const page = await collect(first, (id, index) => state.request('chunk', { id, index }))
+    assert.equal(page.tasks.length, 400)
+    assert.ok(parts.length >= 1)
+  } finally {
+    await dispose(state)
   }
 })

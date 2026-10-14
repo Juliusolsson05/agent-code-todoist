@@ -1,6 +1,8 @@
 import type { JsonValue, ViewContext } from 'agent-code-extension-api'
 import { createContext, useContext, useEffect, useState } from 'react'
 
+import { collect } from '../shared/budget'
+
 import type {
   CommentRow,
   HostState,
@@ -66,7 +68,10 @@ export function createBridge(context: ViewContext): Bridge {
       // Strip undefined before it reaches the host validator — an optional
       // field left undefined makes the WHOLE request invalid (budget.ts toJson).
       const payload = input === undefined ? undefined : (JSON.parse(JSON.stringify(input)) as JsonValue)
-      return (await typed.runtime.request(name, payload)) as never
+      // A reply too large for one bridge message arrives in parts (budget.ts
+      // "Chunked replies"); every caller gets the whole value.
+      const reply = await typed.runtime.request(name, payload)
+      return (await collect(reply, (id, index) => typed.runtime.request('chunk', { id, index }))) as never
     },
   }
 }

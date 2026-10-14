@@ -1,6 +1,6 @@
 import { defineService, runService, type JsonValue } from 'agent-code-extension-api'
 
-import { handlers } from './handlers'
+import { invoke, invokeNames } from './invoke'
 import { killJobs } from './jobs'
 
 // Entry of the `todoist.td` service: a Node child Agent Code forks as an Electron
@@ -13,8 +13,10 @@ import { killJobs } from './jobs'
 // `td` (and `brew`/`open` during setup).
 runService(defineService({
   start(context) {
-    for (const [name, handler] of Object.entries(handlers)) {
-      context.onRequest(name, params => (handler as (p: unknown) => Promise<unknown>)(params) as Promise<JsonValue>)
+    // Every request goes through invoke(): one deadline per request and
+    // chunking of replies too large for the host's JSON validator.
+    for (const name of invokeNames) {
+      context.onRequest(name, params => invoke(name, params) as Promise<JsonValue>)
     }
     context.ready()
   },

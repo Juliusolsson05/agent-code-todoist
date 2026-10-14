@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import { after, before, test } from 'node:test'
 
 import * as h from '../server/handlers.ts'
+import { INVOKE_BUDGET_MS } from '../server/handlers.ts'
+import { invoke } from '../server/invoke.ts'
 import { tdErrorCode, tdErrorMessage } from '../src/shared/types.ts'
 import { seed } from '../tests/support/scenario.mjs'
 import { startWorld } from '../tests/support/world.mjs'
@@ -73,6 +75,30 @@ test('a failing complete leaves the task open and reports the failure', async ()
   }
   assert.equal(await code(h.complete({ id })), 'resolved', 'works again once the server recovers')
   await h.uncomplete({ id })
+})
+
+test('a close answered 204 with no body (the pre-spec shape) still completes', async () => {
+  // The spec says 200 + `{}`; the fake answers that by default. Todoist's
+  // REST v2 answered 204, and the SDK accepts any 2xx with an empty body —
+  // both shapes must keep working whichever the live API sends.
+  const id = s.t.nextWeek.id
+  world.fake.fail(r => r.path === `/api/v1/tasks/${id}/close`, { status: 204, body: undefined, times: 1 })
+  assert.equal(await code(h.complete({ id })), 'resolved')
+  await h.uncomplete({ id })
+})
+
+test('a slow failing read cannot outlive the host’s 30 s: retry only within the request deadline', { timeout: 45_000 }, async () => {
+  // Review of PR #2: 16 s to fail + 400 ms + a fresh 16 s = 34.6 s > 30 s.
+  world.fake.fail(r => r.path === '/api/v1/tasks/filter', { status: 503, body: { error: 'busy' }, delayMs: 16_000, times: 2 })
+  const started = Date.now()
+  try {
+    const result = await code(invoke('list', { kind: 'today' }))
+    const elapsed = Date.now() - started
+    assert.ok(['TD_FAILED', 'TIMEOUT'].includes(result), result)
+    assert.ok(elapsed < INVOKE_BUDGET_MS + 1_500, `answered after ${elapsed} ms`)
+  } finally {
+    world.fake.faults.length = 0
+  }
 })
 
 test('a 404 for a task deleted elsewhere is an error, not a crash', async () => {

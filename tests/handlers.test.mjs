@@ -5,7 +5,11 @@ import { join } from 'node:path'
 import { after, beforeEach, test } from 'node:test'
 
 import { countJsonValues } from '../src/shared/budget.ts'
-import { add, list, move, openUrl, quickAdd, status, update } from '../server/handlers.ts'
+import { add, list, move, openUrl, quickAdd, status, update, withinBudget } from '../server/handlers.ts'
+import { chunk, invoke } from '../server/invoke.ts'
+import { collect, isChunked } from '../src/shared/budget.ts'
+import { tdErrorCode } from '../src/shared/types.ts'
+import { isExtensionJson } from './support/bridge.mjs'
 import { sdk } from './sdk.mjs'
 
 // The RPC handlers are where UI intent becomes td argv. These tests point the
@@ -27,6 +31,9 @@ process.stdin.on('data', d => stdin += d).on('end', () => {
   fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify({ args, stdin }) + '\\n')
   const has = (...words) => words.every(w => args.includes(w))
   if (args.includes('--version')) return process.stdout.write('5.4.10\\n')
+  // Deadline scenarios: a read that fails slowly, or never answers.
+  if (has('today') && process.env.FAKE_SLOW_FAIL_MS) return setTimeout(() => { process.stderr.write(JSON.stringify({ error: { code: 'API_ERROR', message: 'HTTP 503' } })); process.exit(1) }, Number(process.env.FAKE_SLOW_FAIL_MS))
+  if (has('today') && process.env.FAKE_HANG) return setTimeout(() => {}, 60_000)
   if (has('auth', 'status')) return process.stdout.write(JSON.stringify({ id: 'u1', email: 'a@b.c', fullName: 'A', authMode: 'read-write', authScope: 'data:read_write' }))
   if (has('today')) return process.stdout.write(JSON.stringify({ results: Array.from({ length: Number(process.env.FAKE_COUNT || 1) }, (_, i) => ({ ...${JSON.stringify(task)}, id: 't' + i })), nextCursor: 'next-1' }))
   if (has('task', 'move')) return process.stdout.write(JSON.stringify({ ok: true, command: 'move', messages: [] }))
@@ -89,22 +96,71 @@ test('ids are validated before they reach td', async () => {
   await assert.rejects(move({ id: 'abc' }), /INVALID: Nowhere/)
 })
 
-test('a page too large for the bridge is trimmed and its cursor withheld', async () => {
+test('a page too large for one bridge message reaches the caller whole, cursor and all', async () => {
   // td inherits the env captured when the service located it, so re-locate.
   process.env.FAKE_COUNT = '400'
   await status({ tdPath: td, refresh: true })
   try {
-    const page = await list({ kind: 'today' })
-    assert.equal(page.truncated, true)
-    assert.equal(page.nextCursor, null, 'td’s cursor points after task 400, not after the last task we kept')
-    assert.ok(countJsonValues(page) < 4096)
+    const reply = await invoke('list', { kind: 'today' })
+    assert.ok(isChunked(reply), '400 tasks do not fit one message')
+    assert.ok(isExtensionJson(reply))
+    const page = await collect(reply, async (id, index) => {
+      const part = chunk({ id, index })
+      assert.ok(isExtensionJson(part), 'each part is a legal message')
+      return part
+    })
+    assert.equal(page.tasks.length, 400, 'nothing is trimmed')
+    assert.equal(page.nextCursor, 'next-1', 'Load more still reaches the rest')
+    assert.equal(page.truncated, false)
   } finally {
     delete process.env.FAKE_COUNT
   }
   await status({ tdPath: td, refresh: true })
-  const small = await list({ kind: 'today' })
-  assert.equal(small.truncated, false)
-  assert.equal(small.nextCursor, 'next-1', 'an untrimmed page keeps td’s cursor for Load more')
+  const small = await invoke('list', { kind: 'today' })
+  assert.ok(!isChunked(small), 'a normal page travels as itself')
+  assert.equal(small.nextCursor, 'next-1')
+})
+
+// ---- one deadline per request ----------------------------------------------
+//
+// Review of PR #2: a read failing after 16 s was retried with a fresh 20 s and
+// answered after 34.6 s — past the host's 30 s, which kills the service (and
+// the runtime). Scaled down here with small budgets so the suite stays fast.
+
+async function withEnv(vars, fn) {
+  Object.assign(process.env, vars)
+  await status({ tdPath: td, refresh: true })
+  try { return await fn() } finally {
+    for (const key of Object.keys(vars)) delete process.env[key]
+    await status({ tdPath: td, refresh: true })
+  }
+}
+
+test('a slow failure is not retried when the request has no time left for it', async () => {
+  await withEnv({ FAKE_SLOW_FAIL_MS: '1500' }, async () => {
+    const started = Date.now()
+    await assert.rejects(withinBudget(() => list({ kind: 'today' }), 6_000), error => tdErrorCode(error) === 'TD_FAILED')
+    const elapsed = Date.now() - started
+    assert.ok(elapsed < 6_000, `answered within the budget (${elapsed} ms)`)
+    const runs = (await calls()).filter(c => c.args.includes('today')).length
+    assert.equal(runs, 1, 'only 4.5 s were left: below the 5 s a retry needs')
+  })
+})
+
+test('a fast transient failure is still retried once when time allows', async () => {
+  await withEnv({ FAKE_SLOW_FAIL_MS: '50' }, async () => {
+    await assert.rejects(withinBudget(() => list({ kind: 'today' }), 20_000), error => tdErrorCode(error) === 'TD_FAILED')
+    assert.equal((await calls()).filter(c => c.args.includes('today')).length, 2)
+  })
+})
+
+test('a td that never answers is cut at the request deadline, not at 20 s', async () => {
+  await withEnv({ FAKE_HANG: '1' }, async () => {
+    const started = Date.now()
+    await assert.rejects(withinBudget(() => list({ kind: 'today' }), 3_000), error => tdErrorCode(error) === 'TIMEOUT')
+    const elapsed = Date.now() - started
+    assert.ok(elapsed < 4_500, `cut near the 3 s budget (${elapsed} ms)`)
+  })
 })
 
 test('openUrl refuses anything that is not a web URL', async () => {

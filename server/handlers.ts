@@ -1,6 +1,7 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { spawn } from 'node:child_process'
 
-import { DETAIL_DESCRIPTION_CHARS, pageOf, toJson } from '../src/shared/budget'
+import { DETAIL_DESCRIPTION_CHARS, toJson } from '../src/shared/budget'
 import { priorityLabel } from '../src/shared/colors'
 import type {
   CommentRow,
@@ -42,15 +43,59 @@ import { TdError, runTd } from './run'
 // (single argv element, `=` form). A title like "-v fix" passed as a separate
 // argv element would be parsed by commander as an OPTION, not a value.
 
-/** Tasks per td page. A compact task is ~20–30 bridge values; 120 keeps a full
- *  page comfortably under the 3500-value page budget so `fitTasks` trimming
- *  (which loses the cursor) is a safety net, not the normal path. */
+/** Tasks per td page. Bigger pages mean fewer "Load more" clicks; smaller ones
+ *  a faster first paint. A page larger than the bridge allows is chunked, never
+ *  trimmed (src/shared/budget.ts), so this is a latency knob, not a limit. */
 const PAGE_LIMIT = 120
+
+/** Saved filters load in one go, up to this many tasks. td refuses `--cursor`
+ *  for a filter with several comma-separated queries ("each section has its
+ *  own cursor") and for a filter with a saved sort order (it sorts locally,
+ *  after fetching everything, and drops the API cursor) — td 5.4.10
+ *  commands/filter/view.js. Paging those is impossible through td, so we ask
+ *  for enough that real filters are complete, and say so when one is not. */
+const FILTER_LIMIT = 1000
+
+/**
+ * One deadline for everything a single service invoke does.
+ *
+ * WHY: Agent Code kills the service when an invoke passes 30 s
+ * (serviceHost.ts) and retires the whole RUNTIME when a view request passes
+ * 30 s (runtimeService.ts) — every open Todoist view dies with it. A per-td
+ * 20 s cap is not enough on its own: a read that fails slowly (16 s) and is
+ * retried gets a fresh 20 s and returned after 34.6 s in review. So the
+ * service wrapper (server/invoke.ts) opens a scope with an absolute deadline,
+ * and every td call inside it — first attempts, retries, sequential calls in
+ * `status` — is cut to what is left. 25 s leaves 5 s for locating td, service
+ * start-up and the two IPC hops before the host's 30 s.
+ */
+export const INVOKE_BUDGET_MS = 25_000
+const invokeScope = new AsyncLocalStorage<{ deadline: number }>()
+
+export function withinBudget<T>(fn: () => Promise<T>, budgetMs = INVOKE_BUDGET_MS): Promise<T> {
+  return invokeScope.run({ deadline: Date.now() + budgetMs }, fn)
+}
+
+function remainingMs(): number {
+  const scope = invokeScope.getStore()
+  return scope ? scope.deadline - Date.now() : Number.POSITIVE_INFINITY
+}
+
+/** Below this, starting td (≈0.4 s of Node start-up alone) cannot produce an
+ *  answer in time; failing fast with TIMEOUT beats being killed by the host. */
+const MIN_ATTEMPT_MS = 1_500
+/** A retry is only worth it if it gets a realistic run, not a sliver. */
+const MIN_RETRY_MS = 5_000
 
 let located: Located | null = null
 let tdVersion: { path: string; version: string } | null = null
 let cachedUser: UserRow | null = null
 let settingPath = ''
+/** Bumped whenever the td path setting changes or td is re-located. A status
+ *  call only updates the cached user if no newer configuration appeared while
+ *  it waited on `td auth status`: otherwise a slow answer from the OLD td
+ *  (another account) overwrote the new account's user (review of PR #2). */
+let configGeneration = 0
 
 async function resolveTd(refresh = false): Promise<{ located: Located | null; searched: string[] }> {
   if (located && !refresh) return { located, searched: [] }
@@ -62,10 +107,15 @@ async function resolveTd(refresh = false): Promise<{ located: Located | null; se
 async function td(args: string[], options: { timeoutMs?: number; expectJson?: boolean; stdin?: string; read?: boolean } = {}): Promise<unknown> {
   const { located: found } = await resolveTd()
   if (!found) throw new TdError('TD_NOT_FOUND', 'The Todoist CLI (td) is not installed or could not be found.')
-  const { read, ...runOptions } = options
+  const { read, timeoutMs = 20_000, ...runOptions } = options
+  const attempt = () => {
+    const left = remainingMs()
+    if (left < MIN_ATTEMPT_MS) throw new TdError('TIMEOUT', `td ${args.slice(0, 2).join(' ')} was not started: the request ran out of time.`)
+    return runTd(found.path, args, { env: found.env, ...runOptions, timeoutMs: Math.min(timeoutMs, left) })
+  }
   try {
     try {
-      return await runTd(found.path, args, { env: found.env, ...runOptions })
+      return await attempt()
     } catch (error) {
       // td 5.4.10 does NOT retry a transient server error (verified by the
       // integration suite: one 503 on /projects failed `project list`, and with
@@ -73,9 +123,10 @@ async function td(args: string[], options: { timeoutMs?: number; expectJson?: bo
       // short pause. Never writes: a failed write may still have landed, and
       // replaying it could duplicate a task — the same rule the host applies.
       // Never TIMEOUT either: that already spent most of the invoke budget.
-      if (read && error instanceof TdError && error.code === 'TD_FAILED') {
+      // And only when the invoke deadline leaves room for a real second run.
+      if (read && error instanceof TdError && error.code === 'TD_FAILED' && remainingMs() - 400 >= MIN_RETRY_MS) {
         await new Promise(resolve => setTimeout(resolve, 400))
-        return await runTd(found.path, args, { env: found.env, ...runOptions })
+        return await attempt()
       }
       throw error
     }
@@ -122,6 +173,8 @@ export async function status(params: unknown): Promise<SetupStatus> {
   const nextSetting = typeof p.tdPath === 'string' ? p.tdPath : settingPath
   const refresh = p.refresh === true || nextSetting !== settingPath
   settingPath = nextSetting
+  if (refresh) configGeneration++
+  const generation = configGeneration
   const job = jobStatus()
   const brew = await locateBrew()
   const base = { brew, job, checkedAt: Date.now() }
@@ -141,7 +194,7 @@ export async function status(params: unknown): Promise<SetupStatus> {
     const info = { path: found.path, version: tdVersion.version, node: null }
     try {
       const user = compactUser(await td(['auth', 'status', '--json'], { timeoutMs: 15_000 }))
-      cachedUser = user
+      if (generation === configGeneration) cachedUser = user
       if (job?.state === 'succeeded') clearFinishedJob()
       return toJson({ state: user ? 'ready' : 'signed-out', td: info, searched, user, error: null, ...base })
     } catch (error) {
@@ -281,7 +334,7 @@ function listArgs(query: ListQuery): string[] {
     case 'label':
       return ['task', 'list', `--label=${requireString(query.query, 'label', 200)}`, ...page]
     case 'filter':
-      if (query.id) return ['filter', 'view', ref(requireId(query.id, 'filter')), ...page]
+      if (query.id) return ['filter', 'view', ref(requireId(query.id, 'filter')), '--json', '--full', `--limit=${FILTER_LIMIT}`, ...(query.cursor ? [`--cursor=${query.cursor}`] : [])]
       return ['task', 'list', `--filter=${requireString(query.query, 'filter', 1000)}`, ...page]
     case 'search':
       // Todoist filter syntax: `search: text` matches content. Commas separate
@@ -300,23 +353,49 @@ function listArgs(query: ListQuery): string[] {
 export async function list(params: unknown): Promise<TaskPage> {
   const query = asObject(params) as ListQuery
   const raw = await td(listArgs(query), { read: true })
-  // `filter view` returns {sections:[{query, results, nextCursor}]} for saved
-  // filters with several comma-separated queries; flatten them (de-duplicated —
-  // a task can match two sections) and drop pagination, which is per section.
+  if (query.kind === 'filter' && query.id) return toJson(filterPage(raw))
+  const { results, nextCursor } = resultsOf(raw)
+  return toJson({ tasks: compactAll(results, item => compactTask(item)), nextCursor, truncated: false })
+}
+
+/**
+ * A saved filter's tasks, and whether that is all of them.
+ *
+ * `td filter view` answers in two shapes: `{results, nextCursor}` for a
+ * one-query filter, and `{sections: [{query, results, nextCursor}]}` when the
+ * filter has several comma-separated queries. Only the first shape can ever be
+ * continued, and only when td kept the API cursor (it drops it when it sorted
+ * locally). Anything else that may have more is reported as `truncated`, so the
+ * view says "showing the first N" instead of presenting a partial list as
+ * complete — the earlier version flattened sections and dropped every cursor.
+ */
+export function filterPage(raw: unknown): TaskPage {
+  const full = (count: number) => count >= FILTER_LIMIT
   if (raw && typeof raw === 'object' && Array.isArray((raw as { sections?: unknown }).sections)) {
+    const sections = (raw as { sections: Array<{ results?: unknown[]; nextCursor?: unknown }> }).sections
     const seen = new Set<string>()
     const tasks: TaskRow[] = []
-    for (const section of (raw as { sections: Array<{ results?: unknown[] }> }).sections) {
+    // td deliberately keeps a task that matches two sections in both (Todoist
+    // shows it under each query). The list is keyed by task id, so the second
+    // copy is dropped here; the task is still shown once.
+    for (const section of sections) {
       for (const task of compactAll(section.results ?? [], item => compactTask(item))) {
         if (seen.has(task.id)) continue
         seen.add(task.id)
         tasks.push(task)
       }
     }
-    return toJson(pageOf(tasks, null))
+    const truncated = sections.some(section => !!section.nextCursor || full(section.results?.length ?? 0))
+    return { tasks, nextCursor: null, truncated }
   }
   const { results, nextCursor } = resultsOf(raw)
-  return toJson(pageOf(compactAll(results, item => compactTask(item)), nextCursor))
+  return {
+    tasks: compactAll(results, item => compactTask(item)),
+    nextCursor,
+    // Sorted saved filters come back sliced to the limit with no cursor; a
+    // full page without a cursor therefore MAY have more.
+    truncated: !nextCursor && full(results.length),
+  }
 }
 
 export async function task(params: unknown): Promise<TaskDetail> {

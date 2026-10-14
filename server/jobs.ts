@@ -14,8 +14,40 @@ import type { JobKind, JobStatus } from '../src/shared/types'
 //
 // One job at a time: a second login while one is waiting would race two OAuth
 // callback servers; an install during a login makes no sense.
+//
+// Process GROUPS, not processes: `brew install` runs curl, git, ruby and
+// post-install scripts as children. Signalling only brew left them alive,
+// still holding our stdout/stderr pipes, so the job never saw 'close' and sat
+// in "running" forever with every later job answered BUSY (review of PR #2,
+// reproduced with a parent/worker pair). Each job is spawned `detached`, which
+// makes it the leader of its own group, and is stopped with a signal to the
+// whole group, escalating to SIGKILL. The job is finished on the leader's
+// 'exit', not on 'close', so a straggler holding a pipe cannot wedge it.
+//
+// Residual, accepted: if the HOST kills this service abruptly (no `stop`), a
+// running job's group is orphaned — exactly as a non-detached child would be.
+// td's OAuth wait gives up by itself after its own timeout.
 
 type Running = { status: JobStatus; child: ChildProcess; timer: ReturnType<typeof setTimeout> }
+
+/** How long a group gets to exit on SIGTERM before SIGKILL. */
+export const KILL_GRACE_MS = 3_000
+
+function signalGroup(child: ChildProcess, signal: NodeJS.Signals): void {
+  if (!child.pid) return
+  try {
+    // Negative pid = the whole process group the detached child leads.
+    process.kill(-child.pid, signal)
+  } catch {
+    // ESRCH: the group is already gone.
+  }
+}
+
+function stopGroup(child: ChildProcess): void {
+  signalGroup(child, 'SIGTERM')
+  const escalate = setTimeout(() => signalGroup(child, 'SIGKILL'), KILL_GRACE_MS)
+  escalate.unref?.()
+}
 
 let current: Running | null = null
 let last: JobStatus | null = null
@@ -52,7 +84,7 @@ export function startJob(job: StartJob): JobStatus {
     throw new Error(`BUSY: ${current.status.kind === 'login' ? 'Sign-in' : 'Installation'} is still running.`)
   }
   const status: JobStatus = { kind: job.kind, state: 'running', startedAt: Date.now(), authorizeUrl: null, detail: null }
-  const child = spawn(job.command, job.args, { env: job.env, stdio: ['ignore', 'pipe', 'pipe'] })
+  const child = spawn(job.command, job.args, { env: job.env, stdio: ['ignore', 'pipe', 'pipe'], detached: true })
   let output = ''
   const onData = (chunk: Buffer) => {
     output = (output + chunk.toString('utf8')).slice(-8000)
@@ -71,7 +103,7 @@ export function startJob(job: StartJob): JobStatus {
     status.detail = job.kind === 'login'
       ? 'Sign-in was not completed within 5 minutes.'
       : 'Installation did not finish within 15 minutes.'
-    child.kill('SIGTERM')
+    stopGroup(child)
   }, LIMITS[job.kind])
 
   const finish = (state: JobStatus['state'], detail: string | null) => {
@@ -84,9 +116,15 @@ export function startJob(job: StartJob): JobStatus {
     job.onDone?.(last)
   }
   child.on('error', error => finish('failed', error.message))
-  child.on('close', code => {
-    const tail = output.replace(/\u001b\[[0-9;]*[A-Za-z]/g, '').trim().split('\n').slice(-4).join('\n')
-    finish(code === 0 ? 'succeeded' : 'failed', code === 0 ? null : tail || `exited with code ${code}`)
+  child.on('exit', code => {
+    // Give the last buffered output a moment to arrive (it is how a failure
+    // explains itself), but never wait on pipes a straggler may hold.
+    setTimeout(() => {
+      // Anything the leader left behind (a cancelled brew's curl) goes too.
+      signalGroup(child, 'SIGKILL')
+      const tail = output.replace(/\u001b\[[0-9;]*[A-Za-z]/g, '').trim().split('\n').slice(-4).join('\n')
+      finish(code === 0 ? 'succeeded' : 'failed', code === 0 ? null : tail || `exited with code ${code}`)
+    }, 50)
   })
   current = { status, child, timer }
   return { ...status }
@@ -95,9 +133,10 @@ export function startJob(job: StartJob): JobStatus {
 export function cancelJob(): void {
   if (!current) return
   current.status.detail = 'Cancelled.'
-  current.child.kill('SIGTERM')
+  stopGroup(current.child)
 }
 
+/** Service shutdown: no grace period, the process is about to go away. */
 export function killJobs(): void {
-  if (current) current.child.kill('SIGKILL')
+  if (current) signalGroup(current.child, 'SIGKILL')
 }

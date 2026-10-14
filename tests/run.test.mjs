@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict'
-import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, test } from 'node:test'
 
+import { envFor } from '../server/locate.ts'
 import { runTd } from '../server/run.ts'
 import { tdErrorCode, tdErrorMessage } from '../src/shared/types.ts'
 
@@ -76,4 +77,27 @@ test('td found but Node missing (Finder-launched app) is reported as a setup pro
 test('non-JSON stdout is BAD_OUTPUT instead of a crash in the caller', async () => {
   const td = await fakeTd('prose', `process.stdout.write('Signed in as you')`)
   await assert.rejects(runTd(td, ['today', '--json'], { env }), error => tdErrorCode(error) === 'BAD_OUTPUT')
+})
+
+test('td runs with its own directory first on PATH, so its `env node` shebang finds the Node it was installed with', async () => {
+  // npm/nvm/volta install td as `#!/usr/bin/env node` next to that Node. An
+  // app launched from Finder has a minimal PATH without it; envFor puts td's
+  // directory first. The fixture's interpreter exists ONLY in td's directory.
+  const bin = join(dir, 'version-manager-bin')
+  await mkdir(bin, { recursive: true })
+  const interpreter = join(bin, 'td-fixture-node')
+  await writeFile(interpreter, '#!/bin/sh\necho \'{"results":[],"nextCursor":null}\'\n')
+  await chmod(interpreter, 0o755)
+  const td = join(bin, 'td')
+  await writeFile(td, '#!/usr/bin/env td-fixture-node\n')
+  await chmod(td, 0o755)
+  const finderEnv = { ...process.env, PATH: '/usr/bin:/bin' }
+  await assert.rejects(runTd(td, ['today', '--json'], { env: finderEnv }), 'premise: without td’s directory the interpreter is not found')
+  const saved = process.env.PATH
+  process.env.PATH = '/usr/bin:/bin'
+  try {
+    assert.deepEqual(await runTd(td, ['today', '--json'], { env: envFor(td, null) }), { results: [], nextCursor: null })
+  } finally {
+    process.env.PATH = saved
+  }
 })
