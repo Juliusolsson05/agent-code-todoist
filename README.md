@@ -108,6 +108,8 @@ NODE_ENV=development npm install --include=dev
 npm run preview          # the real views against a fake Todoist, at http://localhost:5199
 npm run shots            # screenshots of every state into dev/shots/
 npm test                 # model, td boundary and handler tests
+npm run test:integration # the real td 5.4.10 against a fake Todoist API
+npm run test:ui          # the views in Chromium, end to end (npx playwright install chromium once)
 npm run test:extension   # production build + install contract against dist/
 npm run record           # optional: record your own redacted td output
 ```
@@ -116,7 +118,7 @@ Always build with `NODE_ENV=production` (the `test:extension` script does). `dis
 `dist-service/` are committed on purpose: Agent Code installs from the repository's source
 tarball. CI fails if they are stale.
 
-To try local changes in the app, use Settings → Extensions → **Load folder…** on this
+To try local changes in the app, use Settings → Extensions → **Load Folder…** on this
 directory, then **Reload** after each build.
 
 ## License

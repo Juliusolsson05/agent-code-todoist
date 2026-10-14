@@ -213,9 +213,17 @@ is the recorded file `tests/fixtures/td-5.4.10-signed-out-today.stderr`.
   argv survives as one element, stdin quick add, TIMEOUT kill, missing binary, missing Node (exit 127),
   non-JSON stdout.
 - `tests/handlers.test.mjs` — the exact argv the handlers build (`--flag=value`, `id:` refs, p1 mapping, label
-  comma, `--no-*` clears), id validation, oversized page trimmed with cursor withheld, openUrl scheme refusal.
-- `tests/model.test.mjs` — budget constants equal the host's, a 300-task page exceeds the bridge and `pageOf`
-  fits it, `toJson`, local-day semantics, Today/Upcoming grouping order, quick-add token kinds and boundaries.
+  comma, `--no-*` clears), id validation, an oversized page delivered whole in chunks with its cursor, the
+  per-request deadline (slow failure not retried, hang cut at the budget, fast failure retried), openUrl scheme
+  refusal.
+- `tests/jobs.test.mjs` — setup jobs against a real parent + worker process pair: Cancel kills the whole group,
+  SIGTERM-ignoring jobs are SIGKILLed after the grace period, shutdown kills at once.
+- `tests/status-race.test.mjs` — two fixture tds (accounts A slow, B fast): a late answer from the old td does not
+  replace the new account's user.
+- `tests/model.test.mjs` — budget constants equal the host's, a 300-task page crosses in legal parts and
+  reassembles exactly, surrogate-safe splitting, `toJson`, local-day semantics, Today/Upcoming grouping order,
+  quick-add token kinds, boundaries and the ` // description` marker, the quick-add follow-up planner, saved-filter
+  completeness (`filterPage` on td's two JSON shapes), the agent-session filter.
 - `testing/extension-contract.test.mjs` (`npm run test:extension`, builds first) — manifest namespacing and view
   reachability, exact permission list, committed entries export their contracts with no `jsxDEV`, and the
   built service answers `status`/rejects bad input over the real SDK `runService` wire.
@@ -232,12 +240,20 @@ is the recorded file `tests/fixtures/td-5.4.10-signed-out-today.stderr`.
     - `integration/writes` — every mutation's exact API body plus the state on the next read.
     - `integration/faults` — revoked token, 429, 5xx, a failed write is never replayed, 404, malformed and future
       payloads, hung API, dead network, no token in messages.
-    - `integration/runtime` — the real runtime in a simulated host whose messages pass a copy of Agent Code's
-      `isExtensionJson` (`tests/support/bridge.mjs`).
+    - `integration/runtime` — the real runtime in a simulated host (`tests/support/host.mjs`) whose messages pass
+      a copy of Agent Code's `isExtensionJson` (`tests/support/bridge.mjs`), calling the service through its real
+      request door (`server/invoke.ts`); plus scripted-service cases for account switches, stale status answers,
+      the Settings-page watcher, reminder paging/windows/rescheduling and the quick-failure-only retry.
+    - `integration/large` — a 300-project/200-label account, a task with 50 × 4,000-char comments, a 130-task
+      list with 20 labels each, a multi-query saved filter — all through `tests/support/viaBridge.mjs`.
     - `integration/golden` — a saved transcript of 21 operations' requests and rows
       (`tests/fixtures/golden/td-5.4.10.json`, days normalised, `UPDATE_GOLDEN=1` re-records and refuses
       failures).
   - Files run one at a time, because parallel `td` processes on a loaded machine hit the 20 s deadline.
+- **UI (`npm run test:ui`, added from review):** `uitests/ui.test.mjs` mounts the real view modules in Chromium
+  (`dev/harness.html`) with their runtime requests forwarded over Playwright to the real runtime → service → td →
+  fake API. The harness registers Agent Code's frame Escape listener first, exactly as `frameDocument.ts` does, so
+  "Esc closed the pane" is observable. One case per UI review finding, plus rapid entry and failed-add recovery.
 - Dev preview (`npm run preview`, `npm run shots`): the real view modules against `dev/fakeHost.ts` with Agent
   Code's Nord and Light token values; screenshots reviewed for every state.
 
@@ -248,8 +264,8 @@ is the recorded file `tests/fixtures/td-5.4.10-signed-out-today.stderr`.
 
 ## Verification boundary
 
-- Agent Code itself is not launched here (standing rule). Install via Settings → Extensions → Load folder…
-  and the consent dialog are verified only by the contract test, not in the app.
+- Agent Code itself is not launched here (standing rule). Install via Settings → Extensions and the consent
+  dialog are verified only by the contract test, not in the app; the owner is trying `v0.1.0-beta.1` live.
 - No authenticated `td` output was recorded: `td` is not installed globally and nobody is signed in. The
   signed-out envelopes are real; signed-in shapes come from the SDK's own schemas/defaults. Recording live
   fixtures needs the user to run `td auth login` — `npm run record` is provided for that and redacts.
@@ -261,7 +277,6 @@ is the recorded file `tests/fixtures/td-5.4.10-signed-out-today.stderr`.
 - Reminders management, attachments upload, workspaces/folders admin, sharing/collaborators, templates,
   backups, billing, activity log (all reachable in Todoist proper via "Open in Todoist").
 - Multi-account switching UI (td supports it; we use td's default account and show which one).
-- Publishing the GitHub repo/release — needs the owner's go-ahead.
 
 ## Rulings
 
@@ -275,8 +290,10 @@ is the recorded file `tests/fixtures/td-5.4.10-signed-out-today.stderr`.
 - Ruling: quick-add `#`/`@` tokens need whitespace before them and a date needs a real sentence boundary after —
   caught by tests: `jane@example.com` was highlighted as a label, `Monday.com` as a date — cost: a rare true token
   glued to punctuation is not highlighted (hint layer only; Todoist still parses it).
-- Ruling: GitHub repo created **private** — publishing a public repo is the owner's call; Agent Code can install
-  from a private repo through its gh-auth path — cost: flip visibility when ready.
+- Ruling: GitHub repo is **public** (owner, 2026-10-14). It started private, but Agent Code downloads the
+  release tarball WITHOUT the gh token (it only authenticates the API lookups), so a private repo cannot be
+  installed at all. Betas are published as normal (not pre-) releases because the installer resolves
+  `releases/latest`, which skips pre-releases.
 - Ruling: sections load per project (`sections` RPC + view cache) — `td section list` refuses to run without a
   project; the first version's account-wide call silently returned nothing (found by the integration run).
 - Ruling: the service retries a failed READ once, never a write — td does not retry a transient 5xx; replaying
@@ -287,6 +304,62 @@ is the recorded file `tests/fixtures/td-5.4.10-signed-out-today.stderr`.
 - Ruling: `openUrl` accepts http(s) only — the service is unsandboxed and must not open `file:`/custom schemes;
   any web host is allowed because links inside users' own tasks (PRs, docs) would otherwise be dead in the
   sandboxed frame. (Changed during build from "Todoist origins only".)
+
+- Ruling: replies too large for one bridge message are CHUNKED, never trimmed (`src/shared/budget.ts`, `server/invoke.ts`)
+  — trimming dropped td's cursor and nothing bounded `meta`/`task`, and an invalid reply makes the host kill the
+  service — cost: a large reply costs one extra request per 96k characters.
+- Ruling: one 25 s deadline per service request (`INVOKE_BUDGET_MS`), shared by every td call in it, retries
+  included; the runtime restarts-and-retries a read only if the failure came within 2 s — the host kills the
+  service at 30 s and retires the whole runtime when a view request passes 30 s.
+- Ruling: saved filters load up to 1000 tasks in one go and say "showing the first N" when more may exist — td
+  cannot page multi-query or sorted filters — cost: a >1000-task filter is partial (and says so).
+- Ruling: quick add sends the typed line untouched and applies view/picker intent afterwards from the RETURNED
+  task (`src/shared/quickAddPlan.ts`) — appending syntax corrupted ` // description` lines and the tokenizer
+  mis-routed `#123` — cost: one extra td call when the parser did not already apply the intent.
+- Ruling: the pane opens on the "Open on" setting every time; the last view is no longer remembered — otherwise
+  the setting did nothing after the first session.
+- Ruling: Escape is handled on `document` in the bubble phase (`src/ui/keys.ts`) — the host's own `window`
+  listener runs before any later `window` listener, so our preventDefault was too late.
+
+## Review of PR #2 (one round: Codex on the service and runtime, Claude on the UI, host contract and tests)
+
+Both reviewers gave the verdict FIX-BEFORE-MERGE. Every finding was checked against the code before it was fixed. Each fix has a regression test, and each test was mutation-checked: the fix was reverted and the test went red. All 22 mutations were caught.
+
+| # | Finding | Verdict | Disposition |
+|---|---|---|---|
+| S1 | `meta` (300 projects + 200 labels) and `task` (50 × 4k comments) exceed the bridge, so the host kills the service | valid, P1 | fixed in `b163be7`: replies are chunked, never trimmed (`integration/large`) |
+| S2 | A retried read can outlive the host's 30 s | valid, P1 | fixed in `b163be7`: one 25 s deadline per request; the runtime retries only quick failures |
+| S3 | Filters and trimmed pages lose tasks with no "Load more" | valid | fixed in `b163be7`: no trimming; multi-query and sorted filters report `truncated` |
+| S4 | Cancel and quit leave setup-job workers alive, and the job sticks at "running" | valid | fixed in `b163be7`: process groups, finish on exit, SIGKILL escalation (`tests/jobs`) |
+| S5 | Changing the td path or account leaves stale views; Settings-page path edits are ignored | valid | fixed in `b163be7`: identity-based reload, and the watcher re-locates `td` |
+| S6 | A late status answer overwrites the new account's user | valid | fixed in `b163be7`: a configuration generation in the service plus a sequence in the runtime |
+| S7 | Due reminders read only page 1 of Today | valid | fixed in `b163be7`: follows up to 10 pages |
+| S-tz | Floating times use the device timezone, not the account's | overstated | declined: per the API spec, a floating time *is* wall-clock local, and fixed-zone times arrive as `Z` |
+| S-crash | A login can be orphaned if the host kills the service abruptly | valid, residual | accepted and documented in `server/jobs.ts`; a non-detached child is orphaned the same way |
+| S-flake | One delete timed out under the reviewer's concurrent load | not reproduced | integration runs green sequentially, locally and on CI; files already run one at a time |
+| F1 | Esc closes the whole pane when a drawer, help or search is open | valid, high | fixed in `b6d256f`: handler moved to `document` (`src/ui/keys.ts`) |
+| F2 | Quick add puts " today" or " p1" inside a ` // description` | valid, high | fixed in `b6d256f`: line sent untouched, intent applied from the returned task |
+| F3 | A partial quick-add failure invites a duplicate | valid | fixed in `b6d256f`: `PartialAdd` message; input cleared; never re-added |
+| F4 | `#123` cancels the project move | valid | fixed in `b6d256f`: decided from the returned project |
+| F5 | A double click completes a recurring task twice | valid | fixed in `b6d256f`: in-flight guard per task |
+| F6 | The drawer paints "completed" after a failure, or for a recurring task | valid | fixed in `b6d256f`: drawer reloads on success and on every revision |
+| F7 | Enter and Space are taken from focused buttons | valid | fixed in `b6d256f`: `isActivatable` exemption |
+| F8 | A mutation discards loaded pages | valid | fixed in `b6d256f`: refresh reloads as many pages as were shown |
+| F9 | The "Open on" setting has no effect after the first session | valid | fixed in `b6d256f`: last view is no longer persisted |
+| F10 | Agent sessions with no kind are hidden | valid | fixed in `b6d256f`: `isAgentSession` excludes only `terminal` and `extension-view` |
+| F11 | The description draft is lost when switching tasks | valid | fixed in `b6d256f`: an open editor saves on unmount |
+| F12 | No Cancel button for a sign-in without a URL, or for an install | valid | fixed in `b6d256f` |
+| F13 | A failed create clears the form | valid | fixed in `b6d256f` |
+| F14 | Label view appends `@"name with spaces"` | valid | fixed in `b6d256f`: labels are applied by update, not as text |
+| Sus-1 | The fake returns 204 where the spec says 200 + `{}` | valid (test fidelity) | the fake now follows the spec; a 204 case is kept in `faults` |
+| Sus-2 | Title double save on Enter then blur | valid | fixed: a ref-guarded save (UI test asserts exactly one update) |
+| Sus-3 | A rollback overwrites a later edit | valid | fixed: reload on failure |
+| Sus-4 | Timed tasks from earlier today are listed under Overdue | product call | declined: the existing tested intent is kept |
+| Sus-5 | An unknown `@label` in quick add | not a defect | declined: meta refetches on the revision bump |
+| Sus-6 | Search Esc leaves "Search: …" as the title | valid | fixed in `b6d256f` |
+| Fidelity | The fake's quick-add parser, `resolveDue`, and the UI having no tests | valid | fixed: spec-faithful parser, bad due strings rejected, `uitests/` (15 cases) |
+| Mutants | R5, R9, R10, R11 and the job/PATH survivors | valid | covered: new runtime, jobs and PATH tests, each mutation-checked |
+| New | The quick-add bar wiped text typed while an add was still in flight (found by the UI suite) | valid | fixed in `b6d256f`: field cleared at submit |
 
 ## Execution notes
 
@@ -303,3 +376,5 @@ is the recorded file `tests/fixtures/td-5.4.10-signed-out-today.stderr`.
 - Verified here: typecheck, 34 unit/boundary tests, 4 contract tests on the production build, 44 real-td
   integration tests (green twice in a row sequentially; green on Linux CI), deterministic rebuild.
 - Not verified: Agent Code itself (not launched), a real Todoist account, real browser OAuth, real brew.
+- Review round done (see Review of PR #2). Owner asked for a beta to try while fixes landed: `v0.1.0-beta.1`
+  (pre-fix head `759c7ce`) published as a normal release; repo made public so the installer can download it.
