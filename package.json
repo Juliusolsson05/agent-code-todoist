@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "test": "node dev/test.mjs tests",
     "test:extension": "NODE_ENV=production npm run build && node dev/test.mjs testing",
+    "test:integration": "node dev/test.mjs integration",
     "verify": "npm run test:extension && npm test",
     "preview": "vite --config vite.dev.config.ts",
     "shots": "node dev/shots.mjs",
@@ -21,6 +22,7 @@
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@doist/todoist-cli": "5.4.10",
     "@doist/todoist-sdk": "15.3.1",
     "@types/node": "^22.20.4",
     "@types/react": "^18.3.3",

@@ -13,7 +13,7 @@ import { pathToFileURL } from 'node:url'
 // manifest entry pointing at a file that was never committed, or a service that
 // never speaks the host's ready/request/shutdown protocol.
 
-const root = join(import.meta.dirname, '..')
+const root = __PROJECT_ROOT__
 const manifest = JSON.parse(await readFile(join(root, 'agent-code.extension.json'), 'utf8'))
 
 test('manifest ids are namespaced and every view is reachable', () => {

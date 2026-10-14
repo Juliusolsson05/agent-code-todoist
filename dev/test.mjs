@@ -26,8 +26,10 @@ try {
     format: 'esm',
     target: 'node22',
     logLevel: 'warning',
-    // Tests read fixtures relative to their SOURCE location.
-    define: { 'import.meta.dirname': JSON.stringify(new URL(`../${dir}`, import.meta.url).pathname) },
+    // Bundling moves every module into one temp file, so module-relative
+    // paths are meaningless there. Tests and helpers resolve files from the
+    // project root instead, injected as a constant.
+    define: { __PROJECT_ROOT__: JSON.stringify(new URL('..', import.meta.url).pathname) },
   })
   const result = spawnSync(process.execPath, ['--test', ...files.map(f => join(out, f))], { stdio: 'inherit' })
   process.exitCode = result.status ?? 1

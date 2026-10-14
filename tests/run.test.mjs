@@ -14,7 +14,7 @@ import { tdErrorCode, tdErrorMessage } from '../src/shared/types.ts'
 const dir = await mkdtemp(join(tmpdir(), 'fake-td-'))
 after(() => rm(dir, { recursive: true, force: true }))
 
-const recordedSignedOut = await readFile(join(import.meta.dirname, 'fixtures/td-5.4.10-signed-out-today.stderr'), 'utf8')
+const recordedSignedOut = await readFile(join(__PROJECT_ROOT__, 'tests/fixtures/td-5.4.10-signed-out-today.stderr'), 'utf8')
 
 async function fakeTd(name, body) {
   const path = join(dir, name)
