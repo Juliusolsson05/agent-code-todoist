@@ -5,11 +5,17 @@
   "version": "0.1.0",
   "apiVersion": 2,
   "entry": "dist/runtime.js",
-  "keywords": ["todoist", "tasks", "todo", "productivity"],
+  "keywords": [
+    "todoist",
+    "tasks",
+    "todo",
+    "productivity"
+  ],
   "activationEvents": [
     "onStartupFinished",
     "onView:todoist.main",
     "onView:todoist.quickAdd",
+    "onView:todoist.window",
     "onCommand:todoist.refresh"
   ],
   "contributes": {
@@ -18,29 +24,83 @@
         "id": "todoist.main",
         "title": "Todoist: Open",
         "description": "Open your Todoist tasks in a pane.",
-        "keywords": ["todoist", "tasks", "todo", "today", "inbox", "projects"]
+        "keywords": [
+          "todoist",
+          "tasks",
+          "todo",
+          "today",
+          "inbox",
+          "projects"
+        ]
+      },
+      {
+        "id": "todoist.window",
+        "title": "Todoist: Open in Modal",
+        "description": "Open your Todoist tasks in a floating window instead of a pane.",
+        "keywords": [
+          "todoist",
+          "tasks",
+          "todo",
+          "modal",
+          "popup",
+          "window",
+          "overlay"
+        ]
       },
       {
         "id": "todoist.quickAdd",
         "title": "Todoist: Quick Add Task",
         "description": "Add a task with natural language, optionally linked to an agent.",
-        "keywords": ["todoist", "add task", "new task", "todo", "capture"]
+        "keywords": [
+          "todoist",
+          "add task",
+          "new task",
+          "todo",
+          "capture"
+        ]
       },
       {
         "id": "todoist.refresh",
         "title": "Todoist: Refresh",
-        "keywords": ["todoist", "sync", "reload"]
+        "keywords": [
+          "todoist",
+          "sync",
+          "reload"
+        ]
       }
     ],
     "views": [
-      { "id": "todoist.main", "title": "Todoist", "mount": "panel", "entry": "dist/view.js" },
-      { "id": "todoist.quickAdd", "title": "Quick Add Task", "mount": "modal", "entry": "dist/quickAddView.js" }
+      {
+        "id": "todoist.main",
+        "title": "Todoist",
+        "mount": "panel",
+        "entry": "dist/view.js"
+      },
+      {
+        "id": "todoist.window",
+        "title": "Todoist",
+        "mount": "modal",
+        "entry": "dist/windowView.js"
+      },
+      {
+        "id": "todoist.quickAdd",
+        "title": "Quick Add Task",
+        "mount": "modal",
+        "entry": "dist/quickAddView.js"
+      }
     ],
     "services": [
-      { "id": "todoist.td", "title": "Todoist CLI bridge", "entry": "dist-service/service.mjs" }
+      {
+        "id": "todoist.td",
+        "title": "Todoist CLI bridge",
+        "entry": "dist-service/service.mjs"
+      }
     ],
     "keybindings": [
-      { "command": "todoist.quickAdd", "key": "cmd+alt+t" }
+      {
+        "command": "todoist.quickAdd",
+        "key": "cmd+alt+t"
+      }
     ],
     "settings": [
       {

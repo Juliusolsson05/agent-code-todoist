@@ -7,7 +7,7 @@ import type { ApiPriority, ListQuery, Meta, SectionRow, TaskRow } from '../share
 import { tdErrorCode, tdErrorMessage } from '../shared/types'
 import { useBridge, useHostState, useNow, usePersistent } from './bridge'
 import { isActivatable, onKeyAfterReact } from './keys'
-import { CloseIcon, ExternalIcon, InboxIcon, KeyboardIcon, PlusIcon, RefreshIcon, SearchIcon, SidebarIcon } from './Icons'
+import { CloseIcon, ExternalIcon, InboxIcon, KeyboardIcon, PlusIcon, RefreshIcon, SearchIcon, SidebarIcon, TrashIcon } from './Icons'
 import { QuickAddBar, type QuickAddHandle } from './QuickAddBar'
 import { SetupScreen } from './SetupScreen'
 import { Sidebar, sameView } from './Sidebar'
@@ -32,7 +32,13 @@ type Toast = { id: number; message: string; tone?: 'error'; action?: { label: st
 
 const COMPLETE_ANIMATION_MS = 650
 
-export function App() {
+/** `modal`: the same workspace in a floating dialog (`todoist.window`). The
+ *  host sizes a modal from its content, so the modal root has a fixed natural
+ *  size (styles.css .td-window-root) instead of the pane's 100vh, and the
+ *  header gets a close button (Esc with nothing open also closes it). */
+export type AppVariant = 'pane' | 'modal'
+
+export function App({ variant = 'pane' }: { variant?: AppVariant } = {}) {
   const bridge = useBridge()
   const host = useHostState(bridge)
   const now = useNow()
@@ -43,15 +49,17 @@ export function App() {
 
   if (!ready) {
     return (
-      <div className="td-root">
+      <div className={rootClass(variant)}>
         <SetupScreen setup={host?.setup ?? null} onRetry={async () => { await bridge.call('status', { refresh: true }) }} />
       </div>
     )
   }
-  return <Workspace revision={host!.revision} defaultView={host!.settings.defaultView} now={now} user={host!.setup!.user} />
+  return <Workspace variant={variant} revision={host!.revision} defaultView={host!.settings.defaultView} now={now} user={host!.setup!.user} />
 }
 
-function Workspace({ revision, defaultView, now, user }: { revision: number; defaultView: 'today' | 'upcoming' | 'inbox'; now: Date; user: import('../shared/types').UserRow | null }) {
+const rootClass = (variant: AppVariant, extra = '') => `td-root${variant === 'modal' ? ' td-window-root' : ''}${extra}`
+
+function Workspace({ variant, revision, defaultView, now, user }: { variant: AppVariant; revision: number; defaultView: 'today' | 'upcoming' | 'inbox'; now: Date; user: import('../shared/types').UserRow | null }) {
   const bridge = useBridge()
   // Not persisted: Settings has an "Open on" row, and a remembered last view
   // made it do nothing after the first session (review of PR #2). Within one
@@ -79,6 +87,8 @@ function Workspace({ revision, defaultView, now, user }: { revision: number; def
   const [width, setWidth] = useState(() => window.innerWidth)
   const [overlaySidebar, setOverlaySidebar] = useState(false)
   const [help, setHelp] = useState(false)
+  /** The task waiting for a delete confirmation (⌫ / Delete / row trash). */
+  const [deleting, setDeleting] = useState<TaskRow | null>(null)
   const [addingSection, setAddingSection] = useState<string | null>(null)
   const quickAdd = useRef<QuickAddHandle>(null)
   const searchInput = useRef<HTMLInputElement>(null)
@@ -292,6 +302,25 @@ function Workspace({ revision, defaultView, now, user }: { revision: number; def
     return true
   }, [bridge, view, toast, fail, inboxProject?.id])
 
+  // Delete always asks first: Todoist's API has no undelete, so the Undo toast
+  // that completing gets is impossible here, and ⌫ is easy to hit by accident.
+  const confirmDelete = useCallback(async (task: TaskRow) => {
+    setDeleting(null)
+    // Gone from the list at once; a failure puts it back via the refetch.
+    setTasks(list => list.filter(t => t.id !== task.id && t.parentId !== task.id))
+    if (openId === task.id) setOpenId(null)
+    const index = flat.findIndex(t => t.id === task.id)
+    const next = flat[index + 1] ?? flat[index - 1]
+    setFocusId(next && next.id !== task.id ? next.id : null)
+    try {
+      await bridge.call('delete', { id: task.id })
+      toast(`Deleted “${task.content}”`)
+    } catch (error) {
+      fail(error)
+      void load(view, 'refresh')
+    }
+  }, [bridge, toast, fail, load, view, openId, flat])
+
   const createLabel = useCallback(async (name: string) => {
     try {
       await bridge.call('createLabel', { name })
@@ -341,6 +370,7 @@ function Workspace({ revision, defaultView, now, user }: { revision: number; def
       if (event.key === 'Escape') {
         // Something deeper (a popover, an input's own Escape) already used it.
         if (event.defaultPrevented) return
+        if (deleting) { event.preventDefault(); setDeleting(null); return }
         // Our Escape, never the host's (which would close the pane): close the
         // innermost thing that is open. preventDefault is what tells the host
         // to stay out — see keys.ts for why this listener sits on `document`.
@@ -351,6 +381,9 @@ function Workspace({ revision, defaultView, now, user }: { revision: number; def
         return
       }
       if (typing || event.metaKey || event.ctrlKey || event.altKey) return
+      // The confirmation owns the keyboard while it is open (its Delete button
+      // is focused, so Enter confirms natively).
+      if (deleting) return
       const index = flat.findIndex(t => t.id === focusId)
       const focused = index >= 0 ? flat[index] : null
       const move = (delta: number) => {
@@ -371,6 +404,7 @@ function Workspace({ revision, defaultView, now, user }: { revision: number; def
       else if ((key === 'x' || key === ' ') && focused) { event.preventDefault(); void toggle(focused) }
       else if (/^[1-4]$/.test(key) && focused) { event.preventDefault(); void patch(focused, { priority: (5 - Number(key)) as ApiPriority }) }
       else if (key === 't' && focused) { event.preventDefault(); void patch(focused, { due: 'today' }) }
+      else if ((key === 'Backspace' || key === 'Delete') && focused && !user?.readOnly) { event.preventDefault(); setDeleting(focused) }
       else if (key === 'q' || key === 'a') { event.preventDefault(); quickAdd.current?.focus() }
       else if (key === '/') { event.preventDefault(); setSearching(true); requestAnimationFrame(() => searchInput.current?.focus()) }
       else if (key === 'r') { event.preventDefault(); void load(view, 'refresh'); void bridge.call('meta', {}).then(setMeta, () => {}) }
@@ -379,7 +413,7 @@ function Workspace({ revision, defaultView, now, user }: { revision: number; def
       else if (key === 'g') { /* reserved for g-chords */ }
     }
     return onKeyAfterReact(onKey)
-  }, [flat, focusId, openId, searching, overlaySidebar, help, toggle, patch, load, view, bridge, narrow, sidebarPref, setSidebarPref, closeSearch])
+  }, [flat, focusId, openId, searching, overlaySidebar, help, toggle, patch, load, view, bridge, narrow, sidebarPref, setSidebarPref, closeSearch, deleting, user?.readOnly])
 
   // ---- render -----------------------------------------------------------
   const title = viewTitle(view, meta)
@@ -391,7 +425,7 @@ function Workspace({ revision, defaultView, now, user }: { revision: number; def
   const canAdd = !user?.readOnly && view.kind !== 'completed'
 
   return (
-    <div className={`td-root${narrow ? ' is-narrow' : ''}`}>
+    <div className={rootClass(variant, narrow ? ' is-narrow' : '')}>
       <div className={`td-layout${sidebarVisible && !narrow ? ' has-sidebar' : ''}`}>
         {sidebarVisible && (
           <>
@@ -450,6 +484,9 @@ function Workspace({ revision, defaultView, now, user }: { revision: number; def
               <button className={`td-icon-btn${loading ? ' is-spinning' : ''}`} title="Refresh (r)" onClick={() => { void load(view, 'refresh'); void bridge.call('meta', {}).then(setMeta, () => {}) }}>
                 <RefreshIcon />
               </button>
+              {variant === 'modal' && (
+                <button className="td-icon-btn" title="Close (Esc)" onClick={() => void bridge.context.api.ui.close()}><CloseIcon /></button>
+              )}
             </div>
           </header>
 
@@ -501,6 +538,7 @@ function Workspace({ revision, defaultView, now, user }: { revision: number; def
                       onPatch={patch}
                       onFocus={t => setFocusId(t.id)}
                       onOpenUrl={openUrl}
+                      onDelete={user?.readOnly ? undefined : t => { setFocusId(t.id); setDeleting(t) }}
                     />
                   ))}
                 </section>
@@ -574,6 +612,7 @@ function Workspace({ revision, defaultView, now, user }: { revision: number; def
       </div>
 
       {help && <ShortcutHelp onClose={() => setHelp(false)} />}
+      {deleting && <DeleteConfirm task={deleting} subtasks={childCounts.get(deleting.id) ?? 0} onCancel={() => setDeleting(null)} onConfirm={() => void confirmDelete(deleting)} />}
     </div>
   )
 }
@@ -678,6 +717,21 @@ function ListSkeleton() {
   )
 }
 
+function DeleteConfirm({ task, subtasks, onCancel, onConfirm }: { task: TaskRow; subtasks: number; onCancel: () => void; onConfirm: () => void }) {
+  return (
+    <div className="td-modal-scrim" onClick={onCancel}>
+      <div className="td-help td-delete" onClick={e => e.stopPropagation()} role="dialog" aria-label="Delete task">
+        <div className="td-help-head"><h2>Delete task?</h2></div>
+        <p>“{task.content}”{subtasks ? ` and its ${subtasks} sub-task${subtasks > 1 ? 's' : ''}` : ''} will be deleted. This cannot be undone.</p>
+        <div className="td-delete-actions">
+          <button className="td-btn" onClick={onCancel}>Cancel</button>
+          <button className="td-btn td-btn-danger" autoFocus onClick={onConfirm}><TrashIcon size={13} /> Delete</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function ShortcutHelp({ onClose }: { onClose: () => void }) {
   const rows: Array<[string, string]> = [
     ['q / a', 'Quick add'],
@@ -687,6 +741,7 @@ function ShortcutHelp({ onClose }: { onClose: () => void }) {
     ['x / Space', 'Complete / reopen'],
     ['1 – 4', 'Set priority'],
     ['t', 'Schedule for today'],
+    ['⌫ / Delete', 'Delete task (asks first)'],
     ['r', 'Refresh'],
     ['[', 'Toggle sidebar'],
     ['Esc', 'Close help / drawer / search'],

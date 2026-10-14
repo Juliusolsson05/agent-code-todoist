@@ -3,7 +3,7 @@ import { memo, useRef, useState } from 'react'
 import { colorHex, PRIORITY_COLORS } from '../shared/colors'
 import { dueTone, formatDeadline, formatDue, formatDuration } from '../shared/dates'
 import type { ApiPriority, LabelRow, ProjectRow, SectionRow, TaskRow } from '../shared/types'
-import { CalendarIcon, ClockIcon, CommentIcon, DeadlineIcon, FlagIcon, InboxIcon, LabelIcon, RecurringIcon, SubtaskIcon } from './Icons'
+import { CalendarIcon, ClockIcon, CommentIcon, DeadlineIcon, FlagIcon, InboxIcon, LabelIcon, RecurringIcon, SubtaskIcon, TrashIcon } from './Icons'
 import { renderInline } from './markdown'
 import { DuePicker, PriorityPicker } from './pickers'
 
@@ -23,7 +23,7 @@ export type Lookup = {
 
 export const TaskItem = memo(function TaskItem({
   task, lookup, now, showProject, focused, completing, depth = 0, childCount = 0,
-  onToggle, onOpen, onPatch, onFocus, onOpenUrl,
+  onToggle, onOpen, onPatch, onFocus, onOpenUrl, onDelete,
 }: {
   task: TaskRow
   lookup: Lookup
@@ -39,6 +39,8 @@ export const TaskItem = memo(function TaskItem({
   onPatch: (task: TaskRow, patch: { due?: string; priority?: ApiPriority }) => void
   onFocus: (task: TaskRow) => void
   onOpenUrl: (url: string) => void
+  /** Ask to delete (the caller confirms); absent for read-only accounts. */
+  onDelete?: (task: TaskRow) => void
 }) {
   const [menu, setMenu] = useState<null | 'due' | 'priority'>(null)
   const dueRef = useRef<HTMLButtonElement>(null)
@@ -122,6 +124,11 @@ export const TaskItem = memo(function TaskItem({
           <button ref={prioRef} type="button" className="td-icon-btn" title="Priority (1–4)" onClick={() => setMenu('priority')}>
             <FlagIcon />
           </button>
+          {onDelete && (
+            <button type="button" className="td-icon-btn danger" title="Delete (⌫)" onClick={() => onDelete(task)}>
+              <TrashIcon />
+            </button>
+          )}
         </div>
       )}
 

@@ -18,7 +18,7 @@ import { tdErrorCode } from './shared/types'
 // due reminders on — the service starts lazily on the first request otherwise.
 
 const SERVICE = 'todoist.td'
-const VIEWS = ['todoist.main', 'todoist.quickAdd'] as const
+const VIEWS = ['todoist.main', 'todoist.quickAdd', 'todoist.window'] as const
 
 const READS = new Set(['status', 'meta', 'sections', 'list', 'task'])
 /** Reassembling a large reply (src/shared/budget.ts). Forwarded like a read but

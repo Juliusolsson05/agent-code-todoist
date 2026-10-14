@@ -27,6 +27,7 @@ If you already use `td` in a terminal you are signed in already.
 | | |
 | --- | --- |
 | **Todoist: Open** | The pane: sidebar, grouped task list, quick add, task drawer |
+| **Todoist: Open in Modal** | The same workspace in a floating window, without giving up a pane |
 | **Todoist: Quick Add Task** (⌘⌥T) | Modal quick add from anywhere, with agent linking |
 | **Todoist: Refresh** | Reload every open Todoist view |
 
@@ -61,6 +62,7 @@ In the pane:
 | `x` / `Space` | Complete / reopen |
 | `1`–`4` | Priority p1–p4 |
 | `t` | Schedule for today |
+| `⌫` / `Delete` | Delete the focused task (asks first; Enter confirms, Esc cancels) |
 | `r` | Refresh |
 | `[` | Toggle sidebar |
 | `?` | All shortcuts |

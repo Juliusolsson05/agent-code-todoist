@@ -431,6 +431,8 @@ kbd {
 /* ---------- help ---------- */
 .td-modal-scrim { position: absolute; inset: 0; z-index: 150; background: rgb(0 0 0 / 0.4); display: grid; place-items: center; animation: td-fade 0.12s; }
 .td-help { width: min(380px, calc(100% - 24px)); background: var(--td-elevated); border: 1px solid var(--td-border-hi); border-radius: 12px; box-shadow: var(--td-shadow); padding: 6px 16px 14px; }
+.td-delete p { margin: 2px 0 12px; color: var(--td-dim); font-size: 13px; line-height: 1.45; }
+.td-delete-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .td-help-head { display: flex; align-items: center; justify-content: space-between; }
 .td-help h2 { font-size: 14px; margin: 8px 0; }
 .td-help dl { margin: 0; }
@@ -460,6 +462,11 @@ kbd {
 .td-setup-ver { margin-top: 6px !important; font-family: var(--td-mono); font-size: 10.5px; word-break: break-all; }
 
 /* ---------- quick add modal ---------- */
+/* Full workspace in a modal (todoist.window). The host sizes a modal FROM its
+   content (frameDocument.ts reportSize), so this must be a fixed natural size:
+   100vh would resolve against the iframe, whose height comes from us. 1100x720
+   fits a 13" laptop window unscaled; the host scales it down below that. */
+.td-root.td-window-root { width: 1100px; height: 720px; }
 .td-modal-root { height: auto; min-height: 0; width: min(620px, 100vw); background: var(--td-surface); }
 .td-modal-root .td-setup { padding: 12px; }
 .td-modal-root .td-setup-card { border: 0; background: transparent; }

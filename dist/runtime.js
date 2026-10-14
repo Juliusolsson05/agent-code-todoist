@@ -1,5 +1,5 @@
 import { a as O, b as V, c as q, e as C } from "./shared-types.js";
-const k = "todoist.td", $ = ["todoist.main", "todoist.quickAdd"], b = /* @__PURE__ */ new Set(["status", "meta", "sections", "list", "task"]), D = "chunk", H = 2e3, R = /* @__PURE__ */ new Set([
+const k = "todoist.td", $ = ["todoist.main", "todoist.quickAdd", "todoist.window"], b = /* @__PURE__ */ new Set(["status", "meta", "sections", "list", "task"]), D = "chunk", H = 2e3, R = /* @__PURE__ */ new Set([
   "quickAdd",
   "add",
   "update",

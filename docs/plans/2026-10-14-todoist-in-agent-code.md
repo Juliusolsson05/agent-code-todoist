@@ -361,6 +361,17 @@ Both reviewers gave the verdict FIX-BEFORE-MERGE. Every finding was checked agai
 | Mutants | R5, R9, R10, R11 and the job/PATH survivors | valid | covered: new runtime, jobs and PATH tests, each mutation-checked |
 | New | The quick-add bar wiped text typed while an add was still in flight (found by the UI suite) | valid | fixed in `b6d256f`: field cleared at submit |
 
+## Additions after the first beta (owner requests, 2026-10-14)
+
+- **Todoist: Open in Modal** (`todoist.window`, `src/windowView.tsx`): the same `App` with `variant="modal"`.
+  The host sizes a modal from its content (agent-code `frameDocument.ts` reportSize), so the modal root has a
+  fixed natural size (1100×720; the host scales it down on small windows) instead of the pane's `100vh`, and the
+  header gains a close button. The runtime publishes to all three views.
+- **Delete from the keyboard:** ⌫/Delete on the focused task, or the row's trash button, opens a confirmation
+  (Delete focused: Enter confirms; Esc cancels and never reaches the host). Ruling: confirm, not undo — Todoist's
+  API has no undelete — cost: one extra keystroke.
+- Tests: `uitests/` cases for both, each mutation-checked.
+
 ## Execution notes
 
 - 2026-10-14: plan committed first; implementation landed in one pass. Owner asked mid-build to follow the Agent

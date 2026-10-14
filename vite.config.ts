@@ -10,8 +10,8 @@ import { extensionViteConfig } from 'agent-code-extension-api'
 // and the pinned production JSX transform. We spread its `define`/`build` rather
 // than cherry-picking deeper keys because the preset also owns `esbuild.jsxDev`.
 //
-// Three entries, three frames: the hidden runtime, the panel, and the quick-add
-// modal. The two views share chunks (React, the shared model); the installer
+// Four entries, four frames: the hidden runtime, the panel, the quick-add
+// modal, and the full workspace as a modal. The two views share chunks (React, the shared model); the installer
 // serves contained sibling chunks, and they are committed with dist/.
 //
 // Always build with NODE_ENV=production (see README): a dev build emits jsxDEV,
@@ -21,6 +21,7 @@ const preset = extensionViteConfig({
     runtime: 'src/runtime.ts',
     view: 'src/view.tsx',
     quickAddView: 'src/quickAddView.tsx',
+    windowView: 'src/windowView.tsx',
   },
 }) as UserConfig
 

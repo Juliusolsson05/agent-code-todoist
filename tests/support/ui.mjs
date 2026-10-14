@@ -20,7 +20,7 @@ export async function startUi() {
   const browser = await chromium.launch()
 
   async function open({ view = 'main', storage = {}, sessions = [], width = 1180 } = {}) {
-    const viewId = view === 'modal' ? 'todoist.quickAdd' : 'todoist.main'
+    const viewId = view === 'modal' ? 'todoist.quickAdd' : view === 'window' ? 'todoist.window' : 'todoist.main'
     const page = await browser.newPage({ viewport: { width, height: 820 } })
     const errors = []
     page.on('pageerror', error => errors.push(error.message))

@@ -27,7 +27,7 @@ window.addEventListener('keydown', event => {
 })
 
 const params = new URLSearchParams(location.search)
-const modal = params.get('view') === 'modal'
+const which = params.get('view') ?? 'main'
 
 const listeners = new Set<(state: unknown) => void>()
 let current: unknown = await w.__state()
@@ -52,7 +52,7 @@ const context = {
     panes: { observe: async () => [{ tabId: 'tab1', leafSessionIds: [] }], subscribe: () => () => {} },
     notifications: { show: async () => {} },
   },
-  view: { id: modal ? 'todoist.quickAdd' : 'todoist.main', instanceId: 'uitest' },
+  view: { id: which === 'modal' ? 'todoist.quickAdd' : which === 'window' ? 'todoist.window' : 'todoist.main', instanceId: 'uitest' },
   runtime: {
     state: () => current,
     request: (name: string, input: unknown) => w.__request(name, input),
@@ -60,7 +60,7 @@ const context = {
   },
 }
 
-const viewModule = modal ? await import('../src/quickAddView') : await import('../src/view')
+const viewModule = which === 'modal' ? await import('../src/quickAddView') : which === 'window' ? await import('../src/windowView') : await import('../src/view')
 viewModule.default.mount(document.getElementById('frame')!, context as never)
 
 export {}

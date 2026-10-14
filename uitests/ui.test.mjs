@@ -194,6 +194,64 @@ test('the "Open on" setting decides where the pane opens', async () => {
   })
 })
 
+test('"Open in Modal": the full workspace at a fixed natural size, closable by button and by Esc', async () => {
+  await withView({ view: 'window', width: 1400 }, async ({ page, events }) => {
+    await row(page, 'Overdue invoice').waitFor()
+    // The host sizes a modal from its content: the root must not depend on
+    // the frame's own height (100vh), or the modal collapses.
+    const box = await page.locator('.td-root').boundingBox()
+    assert.deepEqual([box.width, box.height], [1100, 720])
+    await row(page, 'Overdue invoice').click()
+    await drawer(page).waitFor()
+    await page.keyboard.press('Escape')
+    await drawer(page).waitFor({ state: 'detached' })
+    assert.equal(events.hostEscapes, 0, 'Esc closed the drawer, not the modal')
+    await page.keyboard.press('Escape')
+    assert.equal(events.hostEscapes, 1, 'nothing open: Esc closes the modal')
+    await page.getByTitle('Close (Esc)').first().click()
+    await eventually(() => events.closes === 1, { what: 'the close button to close the modal' })
+  })
+})
+
+test('⌫ deletes the focused task after a confirmation; Esc cancels without closing the pane', async () => {
+  const doomed = world.fake.addTask({ content: 'Delete me with backspace', due: { date: dayFromToday(0), datetime: null, is_recurring: false, lang: 'en', string: 'today', timezone: null } })
+  const kept = world.fake.addTask({ content: 'Keep me please', due: { date: dayFromToday(0), datetime: null, is_recurring: false, lang: 'en', string: 'today', timezone: null } })
+  await withView({}, async ({ page, events }) => {
+    const dialog = page.getByRole('dialog', { name: 'Delete task' })
+    // Esc cancels: nothing deleted, the host never saw the key.
+    await row(page, 'Keep me please').click()
+    await page.keyboard.press('Escape') // closes the drawer the click opened
+    await page.keyboard.press('Backspace')
+    await dialog.waitFor()
+    await page.keyboard.press('Escape')
+    await dialog.waitFor({ state: 'detached' })
+    assert.equal(events.hostEscapes, 0)
+    assert.equal(task(kept.id).is_deleted, false)
+
+    // ⌫ then Enter (the focused Delete button) deletes.
+    await row(page, 'Delete me with backspace').click()
+    await page.keyboard.press('Escape')
+    await page.keyboard.press('Backspace')
+    await dialog.getByText('Delete me with backspace').waitFor()
+    await page.keyboard.press('Enter')
+    await eventually(() => task(doomed.id).is_deleted, { what: 'the delete' })
+    await page.locator('.td-toast', { hasText: 'Deleted' }).waitFor()
+    assert.equal(await row(page, 'Delete me with backspace').count(), 0)
+    assert.equal(task(kept.id).is_deleted, false, 'only the focused task')
+  })
+})
+
+test('the row’s trash button asks before deleting', async () => {
+  const doomed = world.fake.addTask({ content: 'Trash via hover', due: { date: dayFromToday(0), datetime: null, is_recurring: false, lang: 'en', string: 'today', timezone: null } })
+  await withView({}, async ({ page }) => {
+    await row(page, 'Trash via hover').hover()
+    await row(page, 'Trash via hover').getByTitle('Delete (⌫)').click()
+    const dialog = page.getByRole('dialog', { name: 'Delete task' })
+    await dialog.getByRole('button', { name: 'Delete' }).click()
+    await eventually(() => task(doomed.id).is_deleted, { what: 'the delete' })
+  })
+})
+
 test('Quick Add lists agent sessions saved without a kind, and no terminals', async () => {
   const sessions = [
     { id: 'a1', kind: null, title: 'Legacy agent', cwd: '/work', activity: 'idle', notification: null },
