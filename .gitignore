@@ -1,0 +1,12 @@
+node_modules
+test-results/
+.DS_Store
+*.log
+dev/shots/
+
+# NOTE: dist/ and dist-service/ are deliberately NOT ignored. Agent Code installs
+# an extension from the repository SOURCE tarball, so the built entries named in
+# agent-code.extension.json must be committed or every GitHub install fails with
+# "manifest points at a file that does not exist" (same policy as Timer, Mini
+# Games and Skitgubbe).
+.worktrees/
