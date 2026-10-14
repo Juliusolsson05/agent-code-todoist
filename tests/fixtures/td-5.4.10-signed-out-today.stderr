@@ -1,0 +1,1 @@
+{"error":{"code":"NO_TOKEN","message":"No API token found. Set TODOIST_API_TOKEN or run `td auth login` or `td auth token <token>`.","hints":["Set TODOIST_API_TOKEN or run: td auth login"]}}
