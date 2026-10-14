@@ -547,8 +547,17 @@ async function resolveTd(refresh = false) {
 async function td(args, options = {}) {
   const { located: found } = await resolveTd();
   if (!found) throw new TdError("TD_NOT_FOUND", "The Todoist CLI (td) is not installed or could not be found.");
+  const { read, ...runOptions } = options;
   try {
-    return await runTd(found.path, args, { env: found.env, ...options });
+    try {
+      return await runTd(found.path, args, { env: found.env, ...runOptions });
+    } catch (error) {
+      if (read && error instanceof TdError && error.code === "TD_FAILED") {
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        return await runTd(found.path, args, { env: found.env, ...runOptions });
+      }
+      throw error;
+    }
   } catch (error) {
     if (error instanceof TdError && error.code === "TD_NOT_FOUND") located = null;
     if (error instanceof TdError && error.code === "NO_TOKEN") cachedUser = null;
@@ -671,21 +680,30 @@ async function openUrl(params) {
   return { ok: true };
 }
 async function meta() {
-  const [projects, sections, labels, filters] = await Promise.all([
-    td(["project", "list", "--all", "--json", "--full"]),
-    td(["section", "list", "--all", "--json", "--full"]).catch(() => ({ results: [] })),
-    td(["label", "list", "--all", "--json", "--full"]).catch(() => ({ results: [] })),
+  const [projects, labels, filters] = await Promise.all([
+    td(["project", "list", "--all", "--json", "--full"], { read: true }),
+    td(["label", "list", "--all", "--json", "--full"], { read: true }).catch(() => ({ results: [] })),
     // Saved filters are a Pro feature; a free account must still get a sidebar.
-    td(["filter", "list", "--json", "--full"]).catch(() => ({ results: [] }))
+    td(["filter", "list", "--json", "--full"], { read: true }).catch(() => ({ results: [] }))
   ]);
   const projectRows = compactAll(resultsOf(projects).results, compactProject).sort((a, b) => Number(b.isInbox) - Number(a.isInbox) || a.order - b.order);
   return toJson({
     projects: projectRows,
-    sections: compactAll(resultsOf(sections).results, compactSection).sort((a, b) => a.order - b.order),
+    sections: [],
     labels: compactAll(resultsOf(labels).results, compactLabel).sort((a, b) => a.order - b.order || a.name.localeCompare(b.name)),
     filters: compactAll(resultsOf(filters).results, compactFilter),
     user: cachedUser
   });
+}
+async function sections(params) {
+  const projectId = requireId(asObject(params).projectId, "project");
+  const raw = await td(["section", "list", ref(projectId), "--all", "--json", "--full"], { read: true });
+  return toJson(compactAll(resultsOf(raw).results, compactSection).sort((a, b) => a.order - b.order));
+}
+function localDay(offset) {
+  const d = /* @__PURE__ */ new Date();
+  d.setDate(d.getDate() + offset);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 function listArgs(query) {
   const page = ["--json", "--full", `--limit=${PAGE_LIMIT}`, ...query.cursor ? [`--cursor=${query.cursor}`] : []];
@@ -706,14 +724,14 @@ function listArgs(query) {
     case "search":
       return ["task", "list", `--filter=search: ${requireString(query.query, "search", 200).replace(/[,&|]/g, " ")}`, ...page];
     case "completed":
-      return ["completed", "list", ...page];
+      return ["completed", "list", `--since=${localDay(-14)}`, ...page];
     default:
       throw new TdError("INVALID", "Unknown list.");
   }
 }
 async function list(params) {
   const query = asObject(params);
-  const raw = await td(listArgs(query));
+  const raw = await td(listArgs(query), { read: true });
   if (raw && typeof raw === "object" && Array.isArray(raw.sections)) {
     const seen = /* @__PURE__ */ new Set();
     const tasks = [];
@@ -732,8 +750,8 @@ async function list(params) {
 async function task(params) {
   const id = requireId(asObject(params).id);
   const [raw, comments] = await Promise.all([
-    td(["task", "view", ref(id), "--json", "--full", "--include-children"]),
-    td(["comment", "list", ref(id), "--json", "--full", "--limit=50"]).catch(() => ({ results: [] }))
+    td(["task", "view", ref(id), "--json", "--full", "--include-children"], { read: true }),
+    td(["comment", "list", ref(id), "--json", "--full", "--limit=50"], { read: true }).catch(() => ({ results: [] }))
   ]);
   const row = compactTask(raw, DETAIL_DESCRIPTION_CHARS);
   if (!row) throw new TdError("BAD_OUTPUT", "td returned no task.");
@@ -863,6 +881,7 @@ var handlers = {
   logout,
   openUrl,
   meta,
+  sections,
   list,
   task,
   quickAdd,
