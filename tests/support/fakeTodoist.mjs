@@ -312,8 +312,13 @@ export class FakeTodoist {
       if (parts.length === 2 && method === 'GET') return ok(task)
       if (parts.length === 2 && method === 'POST') return ok(this.updateTask(task, body))
       if (parts.length === 2 && method === 'DELETE') {
-        task.is_deleted = true
-        for (const child of this.tasks.filter(t => t.parent_id === task.id)) child.is_deleted = true
+        // Todoist deletes the whole subtree, not just direct children.
+        const doomed = new Set([task.id])
+        for (let grew = true; grew;) {
+          grew = false
+          for (const t of this.tasks) if (t.parent_id && doomed.has(t.parent_id) && !doomed.has(t.id)) { doomed.add(t.id); grew = true }
+        }
+        for (const t of this.tasks) if (doomed.has(t.id)) t.is_deleted = true
         return ok({})
       }
       if (parts[2] === 'close' && method === 'POST') {

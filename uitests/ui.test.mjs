@@ -195,7 +195,7 @@ test('the "Open on" setting decides where the pane opens', async () => {
 })
 
 test('"Open in Modal": the full workspace at a fixed natural size, closable by button and by Esc', async () => {
-  await withView({ view: 'window', width: 1400 }, async ({ page, events }) => {
+  await withView({ view: 'window', width: 1400 }, async ({ page, events, rt }) => {
     await row(page, 'Overdue invoice').waitFor()
     // The host sizes a modal from its content: the root must not depend on
     // the frame's own height (100vh), or the modal collapses.
@@ -208,6 +208,9 @@ test('"Open in Modal": the full workspace at a fixed natural size, closable by b
     assert.equal(events.hostEscapes, 0, 'Esc closed the drawer, not the modal')
     await page.keyboard.press('Escape')
     assert.equal(events.hostEscapes, 1, 'nothing open: Esc closes the modal')
+    // A change made elsewhere (another view) reaches the modal too.
+    await rt.request('quickAdd', { text: 'Added from the pane today' })
+    await row(page, 'Added from the pane').waitFor()
     await page.getByTitle('Close (Esc)').first().click()
     await eventually(() => events.closes === 1, { what: 'the close button to close the modal' })
   })
@@ -249,6 +252,102 @@ test('the row’s trash button asks before deleting', async () => {
     const dialog = page.getByRole('dialog', { name: 'Delete task' })
     await dialog.getByRole('button', { name: 'Delete' }).click()
     await eventually(() => task(doomed.id).is_deleted, { what: 'the delete' })
+  })
+})
+
+const todayDue = (offset = 0) => ({ date: dayFromToday(offset), datetime: null, is_recurring: false, lang: 'en', string: offset ? 'later' : 'today', timezone: null })
+
+test('⌫ in a child’s drawer deletes that child, not the parent the list had focused', async () => {
+  const parent = world.fake.addTask({ content: 'Drawer parent', due: todayDue() })
+  const child = world.fake.addTask({ content: 'Drawer child', parent_id: parent.id, due: todayDue(1) })
+  await withView({}, async ({ page }) => {
+    await row(page, 'Drawer parent').click()
+    await drawer(page).getByRole('button', { name: 'Drawer child' }).click()
+    await drawer(page).getByRole('heading', { name: 'Drawer child' }).waitFor()
+    await page.keyboard.press('Backspace')
+    const dialog = page.getByRole('dialog', { name: 'Delete task' })
+    await dialog.getByText('“Drawer child”').waitFor()
+    await page.keyboard.press('Enter')
+    await eventually(() => task(child.id).is_deleted, { what: 'the child to be deleted' })
+    assert.equal(task(parent.id).is_deleted, false, 'the parent survives')
+  })
+})
+
+test('the confirmation counts sub-tasks the current view does not show', async () => {
+  const parent = world.fake.addTask({ content: 'Hidden-child parent', due: todayDue() })
+  const child = world.fake.addTask({ content: 'Hidden child', parent_id: parent.id, due: todayDue(1) }) // not in Today
+  await withView({}, async ({ page }) => {
+    await row(page, 'Hidden-child parent').hover()
+    await row(page, 'Hidden-child parent').getByTitle('Delete (⌫)').click()
+    const dialog = page.getByRole('dialog', { name: 'Delete task' })
+    await dialog.getByText('and its 1 sub-task').waitFor()
+    await dialog.getByRole('button', { name: 'Delete' }).click()
+    await eventually(() => task(parent.id).is_deleted && task(child.id).is_deleted, { what: 'the subtree' })
+  })
+})
+
+test('⌫ never opens a delete while typing or inside a picker, and Tab stays in the dialog', async () => {
+  const t = world.fake.addTask({ content: 'Guarded task', due: todayDue() })
+  await withView({}, async ({ page }) => {
+    const dialog = page.getByRole('dialog', { name: 'Delete task' })
+    await page.getByLabel('Quick add task').fill('abc')
+    await page.getByLabel('Quick add task').press('Backspace')
+    assert.equal(await page.getByLabel('Quick add task').inputValue(), 'ab', 'Backspace edits the text')
+    await page.getByLabel('Quick add task').press('Escape') // clear
+    await page.getByLabel('Quick add task').press('Escape') // blur
+
+    await row(page, 'Guarded task').hover()
+    await row(page, 'Guarded task').getByTitle('Priority (1–4)').click()
+    await page.locator('.td-popover').waitFor()
+    await page.keyboard.press('Backspace')
+    await new Promise(r => setTimeout(r, 300))
+    assert.equal(await dialog.count(), 0, 'no delete from inside a picker')
+    await page.keyboard.press('Escape')
+
+    await row(page, 'Guarded task').hover()
+    await row(page, 'Guarded task').getByTitle('Delete (⌫)').click()
+    await dialog.waitFor()
+    for (let i = 0; i < 4; i++) await page.keyboard.press('Tab')
+    assert.ok(await page.evaluate(() => !!document.activeElement?.closest('.td-delete')), 'focus stayed in the dialog')
+    await page.keyboard.press('Escape')
+    await dialog.waitFor({ state: 'detached' })
+    assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('title')), 'Delete (⌫)', 'focus went back to where it was')
+    assert.equal(task(t.id).is_deleted, false)
+  })
+})
+
+test('Delete removes the whole subtree at once and focus moves to the next surviving task', async () => {
+  const parent = world.fake.addTask({ content: 'Focus parent', child_order: 900 })
+  world.fake.addTask({ content: 'Focus child', parent_id: parent.id, child_order: 901 })
+  world.fake.addTask({ content: 'Focus survivor', child_order: 902 })
+  await withView({}, async ({ page }) => {
+    await page.getByRole('button', { name: 'Inbox', exact: true }).first().click()
+    await row(page, 'Focus parent').click()
+    await page.keyboard.press('Escape') // close the drawer the click opened
+    await page.keyboard.press('Delete') // the forward-delete key works too
+    const dialog = page.getByRole('dialog', { name: 'Delete task' })
+    await dialog.waitFor()
+    await page.keyboard.press('Enter')
+    await row(page, 'Focus child').waitFor({ state: 'detached' })
+    const focused = page.locator('.td-task.is-focused')
+    await focused.waitFor()
+    assert.match(await focused.innerText(), /Focus survivor/, 'the next surviving task has focus')
+  })
+})
+
+test('a failed delete restores the CURRENT view, not the one the delete started in', async () => {
+  const doomed = world.fake.addTask({ content: 'Fails slowly', due: todayDue(), project_id: s.home.id }) // in Today, not in Inbox
+  await withView({}, async ({ page }) => {
+    world.fake.fail(r => r.method === 'DELETE' && r.path === `/api/v1/tasks/${doomed.id}`, { status: 500, delayMs: 2500, times: 1 })
+    await row(page, 'Fails slowly').hover()
+    await row(page, 'Fails slowly').getByTitle('Delete (⌫)').click()
+    await page.getByRole('dialog', { name: 'Delete task' }).getByRole('button', { name: 'Delete' }).click()
+    await page.getByRole('button', { name: 'Inbox', exact: true }).first().click()
+    await page.getByRole('heading', { name: 'Inbox' }).waitFor()
+    await page.locator('.td-toast.is-error').first().waitFor({ timeout: 20_000 })
+    await new Promise(r => setTimeout(r, 2500))
+    assert.equal(await row(page, 'Fails slowly').count(), 0, 'Today’s task did not appear in Inbox')
+    assert.equal(task(doomed.id).is_deleted, false)
   })
 })
 

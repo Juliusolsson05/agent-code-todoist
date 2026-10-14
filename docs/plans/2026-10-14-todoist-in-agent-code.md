@@ -371,6 +371,18 @@ Both reviewers gave the verdict FIX-BEFORE-MERGE. Every finding was checked agai
   (Delete focused: Enter confirms; Esc cancels and never reaches the host). Ruling: confirm, not undo — Todoist's
   API has no undelete — cost: one extra keystroke.
 - Tests: `uitests/` cases for both, each mutation-checked.
+- Small review round (Codex) on the additions. Its verdict was FIX-BEFORE-MERGE. All six findings were valid and are
+  fixed in the next commit, each with a mutation-checked UI test:
+  | Finding | Disposition |
+  |---|---|
+  | ⌫ in a child's drawer deleted the parent the list had focused | the drawer's task wins (`openId ?? focused`) |
+  | Esc did not cancel the confirmation while a picker was open | the dialog owns Escape (document capture); ⌫ is ignored inside pickers |
+  | A late delete failure refetched the old view into the new one | recovery refreshes the CURRENT view (`viewRef`) |
+  | The count omitted sub-tasks hidden by the filter | the count comes from the server's task detail; "and any sub-tasks" until it arrives |
+  | Focus went to a deleted child | successor = next SURVIVING task; the whole subtree is removed at once |
+  | Tab escaped the dialog | Tab is trapped, `aria-modal` set, focus restored (found while fixing: focus was captured after autoFocus) |
+  Not added: a read-only-account test (the fake world cannot sign td in read-only); the guard is the same
+  `user.readOnly` check that already hides every write control.
 
 ## Execution notes
 

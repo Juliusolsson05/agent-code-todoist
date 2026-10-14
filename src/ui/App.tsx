@@ -87,8 +87,14 @@ function Workspace({ variant, revision, defaultView, now, user }: { variant: App
   const [width, setWidth] = useState(() => window.innerWidth)
   const [overlaySidebar, setOverlaySidebar] = useState(false)
   const [help, setHelp] = useState(false)
-  /** The task waiting for a delete confirmation (⌫ / Delete / row trash). */
-  const [deleting, setDeleting] = useState<TaskRow | null>(null)
+  /** The task waiting for a delete confirmation (⌫ / Delete / row trash).
+   *  `task`/`subtasks` are filled from the server (see requestDelete). */
+  const [deleting, setDeleting] = useState<Deleting | null>(null)
+  // The view a late callback should act on is the CURRENT one, not the one
+  // captured when it was created (a failed delete once refetched Today's
+  // tasks into the Inbox the user had moved to — review).
+  const viewRef = useRef(view)
+  viewRef.current = view
   const [addingSection, setAddingSection] = useState<string | null>(null)
   const quickAdd = useRef<QuickAddHandle>(null)
   const searchInput = useRef<HTMLInputElement>(null)
@@ -304,22 +310,48 @@ function Workspace({ variant, revision, defaultView, now, user }: { variant: App
 
   // Delete always asks first: Todoist's API has no undelete, so the Undo toast
   // that completing gets is impossible here, and ⌫ is easy to hit by accident.
-  const confirmDelete = useCallback(async (task: TaskRow) => {
+  //
+  // The confirmation states what the SERVER will delete: the task and every
+  // sub-task, fetched with the task — not counted from the visible list. A
+  // filtered view (Today) can hide a child due tomorrow, and the first version
+  // said "will be deleted" without mentioning it (review). Until the detail
+  // arrives the dialog says "and any sub-tasks".
+  const requestDelete = useCallback((id: string, row?: TaskRow) => {
+    setDeleting({ id, task: row ?? null, subtasks: null })
+    bridge.call('task', { id }).then(
+      detail => setDeleting(current => (current?.id === id ? { id, task: detail.task, subtasks: detail.children.length } : current)),
+      () => {}, // keep the cautious wording; deleting still works
+    )
+  }, [bridge])
+
+  const confirmDelete = useCallback(async (target: Deleting) => {
     setDeleting(null)
-    // Gone from the list at once; a failure puts it back via the refetch.
-    setTasks(list => list.filter(t => t.id !== task.id && t.parentId !== task.id))
-    if (openId === task.id) setOpenId(null)
-    const index = flat.findIndex(t => t.id === task.id)
-    const next = flat[index + 1] ?? flat[index - 1]
-    setFocusId(next && next.id !== task.id ? next.id : null)
+    // The task and everything nested under it leave the list at once (the
+    // server deletes the whole subtree); a failure brings them back by refetch.
+    const removed = new Set([target.id])
+    for (let grew = true; grew;) {
+      grew = false
+      for (const t of tasks) if (t.parentId && removed.has(t.parentId) && !removed.has(t.id)) { removed.add(t.id); grew = true }
+    }
+    setTasks(list => list.filter(t => !removed.has(t.id)))
+    if (openId && removed.has(openId)) setOpenId(null)
+    // Keep a usable selection: the next SURVIVING row, else the previous one
+    // (the next row used to be the deleted child, leaving nothing focused).
+    const index = flat.findIndex(t => t.id === target.id)
+    if (index >= 0 || (focusId && removed.has(focusId))) {
+      const from = index >= 0 ? index : flat.findIndex(t => t.id === focusId)
+      const successor = flat.slice(from + 1).find(t => !removed.has(t.id)) ?? flat.slice(0, Math.max(0, from)).reverse().find(t => !removed.has(t.id))
+      setFocusId(successor?.id ?? null)
+    }
+    const name = target.task?.content ?? 'task'
     try {
-      await bridge.call('delete', { id: task.id })
-      toast(`Deleted “${task.content}”`)
+      await bridge.call('delete', { id: target.id })
+      toast(`Deleted “${name}”`)
     } catch (error) {
       fail(error)
-      void load(view, 'refresh')
+      void load(viewRef.current, 'refresh')
     }
-  }, [bridge, toast, fail, load, view, openId, flat])
+  }, [bridge, toast, fail, load, openId, focusId, flat, tasks])
 
   const createLabel = useCallback(async (name: string) => {
     try {
@@ -369,8 +401,8 @@ function Workspace({ variant, revision, defaultView, now, user }: { variant: App
       const typing = target.closest('input, textarea, select, [contenteditable="true"]')
       if (event.key === 'Escape') {
         // Something deeper (a popover, an input's own Escape) already used it.
+        // (The delete confirmation handles its own Escape: see DeleteConfirm.)
         if (event.defaultPrevented) return
-        if (deleting) { event.preventDefault(); setDeleting(null); return }
         // Our Escape, never the host's (which would close the pane): close the
         // innermost thing that is open. preventDefault is what tells the host
         // to stay out — see keys.ts for why this listener sits on `document`.
@@ -404,7 +436,13 @@ function Workspace({ variant, revision, defaultView, now, user }: { variant: App
       else if ((key === 'x' || key === ' ') && focused) { event.preventDefault(); void toggle(focused) }
       else if (/^[1-4]$/.test(key) && focused) { event.preventDefault(); void patch(focused, { priority: (5 - Number(key)) as ApiPriority }) }
       else if (key === 't' && focused) { event.preventDefault(); void patch(focused, { due: 'today' }) }
-      else if ((key === 'Backspace' || key === 'Delete') && focused && !user?.readOnly) { event.preventDefault(); setDeleting(focused) }
+      else if ((key === 'Backspace' || key === 'Delete') && !user?.readOnly && !target.closest('.td-popover, [role="dialog"]')) {
+        // The task the user is looking at: the drawer's, when it is open — a
+        // child opened from its parent's drawer is NOT the list's focused row,
+        // and ⌫ there deleted the parent (and with it the child) in review.
+        const id = openId ?? focused?.id
+        if (id) { event.preventDefault(); requestDelete(id, flat.find(t => t.id === id)) }
+      }
       else if (key === 'q' || key === 'a') { event.preventDefault(); quickAdd.current?.focus() }
       else if (key === '/') { event.preventDefault(); setSearching(true); requestAnimationFrame(() => searchInput.current?.focus()) }
       else if (key === 'r') { event.preventDefault(); void load(view, 'refresh'); void bridge.call('meta', {}).then(setMeta, () => {}) }
@@ -413,7 +451,7 @@ function Workspace({ variant, revision, defaultView, now, user }: { variant: App
       else if (key === 'g') { /* reserved for g-chords */ }
     }
     return onKeyAfterReact(onKey)
-  }, [flat, focusId, openId, searching, overlaySidebar, help, toggle, patch, load, view, bridge, narrow, sidebarPref, setSidebarPref, closeSearch, deleting, user?.readOnly])
+  }, [flat, focusId, openId, searching, overlaySidebar, help, toggle, patch, load, view, bridge, narrow, sidebarPref, setSidebarPref, closeSearch, deleting, user?.readOnly, requestDelete])
 
   // ---- render -----------------------------------------------------------
   const title = viewTitle(view, meta)
@@ -538,7 +576,7 @@ function Workspace({ variant, revision, defaultView, now, user }: { variant: App
                       onPatch={patch}
                       onFocus={t => setFocusId(t.id)}
                       onOpenUrl={openUrl}
-                      onDelete={user?.readOnly ? undefined : t => { setFocusId(t.id); setDeleting(t) }}
+                      onDelete={user?.readOnly ? undefined : t => { setFocusId(t.id); requestDelete(t.id, t) }}
                     />
                   ))}
                 </section>
@@ -612,7 +650,7 @@ function Workspace({ variant, revision, defaultView, now, user }: { variant: App
       </div>
 
       {help && <ShortcutHelp onClose={() => setHelp(false)} />}
-      {deleting && <DeleteConfirm task={deleting} subtasks={childCounts.get(deleting.id) ?? 0} onCancel={() => setDeleting(null)} onConfirm={() => void confirmDelete(deleting)} />}
+      {deleting && <DeleteConfirm target={deleting} onCancel={() => setDeleting(null)} onConfirm={() => void confirmDelete(deleting)} />}
     </div>
   )
 }
@@ -717,12 +755,55 @@ function ListSkeleton() {
   )
 }
 
-function DeleteConfirm({ task, subtasks, onCancel, onConfirm }: { task: TaskRow; subtasks: number; onCancel: () => void; onConfirm: () => void }) {
+type Deleting = { id: string; task: TaskRow | null; subtasks: number | null }
+
+/**
+ * The delete confirmation. It owns the keyboard while open:
+ * - Escape: its own `document` CAPTURE listener, registered after any open
+ *   picker's, so one Escape closes a picker left open underneath AND cancels
+ *   (the picker stops propagation, not immediate propagation). In the bubble
+ *   phase it never ran when a picker was open, leaving Delete armed (review).
+ * - Tab cycles between its two buttons instead of escaping to the sidebar.
+ * - Focus returns to where it was when the dialog closes.
+ */
+function DeleteConfirm({ target, onCancel, onConfirm }: { target: Deleting; onCancel: () => void; onConfirm: () => void }) {
+  const dialog = useRef<HTMLDivElement>(null)
+  // Mount-once effect reading the latest callback: re-running it on each
+  // render (the sub-task count arrives a moment later) would restore focus to
+  // the background and disarm the focused Delete button.
+  const cancel = useRef(onCancel)
+  cancel.current = onCancel
+  // Captured during the FIRST render, before the Delete button's autoFocus
+  // runs in the commit; read in an effect it was already the Delete button,
+  // so focus "returned" to a removed element and was lost.
+  const [previous] = useState(() => document.activeElement as HTMLElement | null)
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        event.stopPropagation()
+        cancel.current()
+      } else if (event.key === 'Tab') {
+        const buttons = [...(dialog.current?.querySelectorAll<HTMLButtonElement>('button') ?? [])]
+        if (!buttons.length) return
+        event.preventDefault()
+        const at = buttons.indexOf(document.activeElement as HTMLButtonElement)
+        buttons[(at + (event.shiftKey ? -1 : 1) + buttons.length) % buttons.length].focus()
+      }
+    }
+    document.addEventListener('keydown', onKey, true)
+    return () => {
+      document.removeEventListener('keydown', onKey, true)
+      if (previous?.isConnected) previous.focus()
+    }
+  }, [])
+  const { task, subtasks } = target
+  const scope = subtasks === null ? ' and any sub-tasks' : subtasks > 0 ? ` and its ${subtasks} sub-task${subtasks > 1 ? 's' : ''} (with anything nested under them)` : ''
   return (
     <div className="td-modal-scrim" onClick={onCancel}>
-      <div className="td-help td-delete" onClick={e => e.stopPropagation()} role="dialog" aria-label="Delete task">
+      <div ref={dialog} className="td-help td-delete" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Delete task">
         <div className="td-help-head"><h2>Delete task?</h2></div>
-        <p>“{task.content}”{subtasks ? ` and its ${subtasks} sub-task${subtasks > 1 ? 's' : ''}` : ''} will be deleted. This cannot be undone.</p>
+        <p>{task ? `“${task.content}”` : 'This task'}{scope} will be deleted. This cannot be undone.</p>
         <div className="td-delete-actions">
           <button className="td-btn" onClick={onCancel}>Cancel</button>
           <button className="td-btn td-btn-danger" autoFocus onClick={onConfirm}><TrashIcon size={13} /> Delete</button>

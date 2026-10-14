@@ -1,32 +1,32 @@
-import { r as d, t as At, c as Rt, j as e, n as Ne, b as V, L as Ae, o as it, q as dt, I as Me, T as Pt, v as Mt, w as Ft, x as Lt, y as Ot, U as qt, z as zt, u as Qe, E as de, M as Kt, G as ut, H as Ge, J as Be, P as Ee, C as We, R as mt, K as pt, N as ht, F as lt, O as ft, D as xt, d as jt, e as _t, f as Ut, Q as Yt, a as Bt, V as Wt, S as Ht, W as Vt, g as Qt, p as Gt, h as Jt, X as Xt, Y as Zt, Z as es } from "./shared-SetupScreen.js";
-import { t as X, b as ts } from "./shared-types.js";
-const Je = 864e5;
-function le(s) {
-  return Math.floor(Date.UTC(s.getFullYear(), s.getMonth(), s.getDate()) / Je);
+import { r as d, t as Pt, c as Mt, j as e, n as Ne, b as Q, L as Ae, o as lt, q as ut, I as Me, T as Ft, v as Lt, w as Ot, x as qt, y as zt, U as Kt, z as _t, u as Je, E as ue, M as Ut, G as mt, H as Xe, J as He, P as Ee, C as Ve, R as pt, K as ht, N as ft, F as rt, O as xt, D as jt, d as bt, e as Yt, f as Bt, Q as Wt, a as Ht, V as Vt, S as Qt, W as Gt, g as Jt, p as Xt, h as Zt, X as es, Y as ts, Z as ss } from "./shared-SetupScreen.js";
+import { t as Z, b as ns } from "./shared-types.js";
+const Ze = 864e5;
+function re(s) {
+  return Math.floor(Date.UTC(s.getFullYear(), s.getMonth(), s.getDate()) / Ze);
 }
-function Xe(s) {
+function et(s) {
   const [t, a, o] = s.slice(0, 10).split("-").map(Number);
   return new Date(t, (a || 1) - 1, o || 1);
 }
 function Ce(s) {
-  return s.datetime ? le(new Date(s.datetime)) : le(Xe(s.date));
+  return s.datetime ? re(new Date(s.datetime)) : re(et(s.date));
 }
 function Re(s, t) {
   if (!s) return "none";
-  const a = le(t), o = Ce(s);
+  const a = re(t), o = Ce(s);
   return o < a || o === a && s.datetime && new Date(s.datetime).getTime() < t.getTime() ? "overdue" : o === a ? "today" : o === a + 1 ? "tomorrow" : o < a + 7 ? "week" : "future";
 }
-const ss = new Intl.DateTimeFormat(void 0, { hour: "numeric", minute: "2-digit" }), bt = new Intl.DateTimeFormat(void 0, { weekday: "long" }), He = new Intl.DateTimeFormat(void 0, { month: "short", day: "numeric" }), yt = new Intl.DateTimeFormat(void 0, { month: "short", day: "numeric", year: "numeric" }), Ze = new Intl.DateTimeFormat(void 0, { weekday: "short", month: "short", day: "numeric" });
-function Ve(s, t) {
-  const a = le(t), o = Ce(s), u = s.datetime ? new Date(s.datetime) : Xe(s.date);
+const as = new Intl.DateTimeFormat(void 0, { hour: "numeric", minute: "2-digit" }), yt = new Intl.DateTimeFormat(void 0, { weekday: "long" }), Qe = new Intl.DateTimeFormat(void 0, { month: "short", day: "numeric" }), kt = new Intl.DateTimeFormat(void 0, { month: "short", day: "numeric", year: "numeric" }), tt = new Intl.DateTimeFormat(void 0, { weekday: "short", month: "short", day: "numeric" });
+function Ge(s, t) {
+  const a = re(t), o = Ce(s), m = s.datetime ? new Date(s.datetime) : et(s.date);
   let c;
-  return o === a ? c = "Today" : o === a + 1 ? c = "Tomorrow" : o === a - 1 ? c = "Yesterday" : o > a && o < a + 7 ? c = bt.format(u) : u.getFullYear() === t.getFullYear() ? c = He.format(u) : c = yt.format(u), s.datetime ? `${c} ${ss.format(u)}` : c;
+  return o === a ? c = "Today" : o === a + 1 ? c = "Tomorrow" : o === a - 1 ? c = "Yesterday" : o > a && o < a + 7 ? c = yt.format(m) : m.getFullYear() === t.getFullYear() ? c = Qe.format(m) : c = kt.format(m), s.datetime ? `${c} ${as.format(m)}` : c;
 }
-function ns(s, t) {
-  const a = Xe(s), o = le(a) - le(t);
-  return o === 0 ? "Today" : o === 1 ? "Tomorrow" : o < 0 ? `${He.format(a)} (passed)` : a.getFullYear() === t.getFullYear() ? He.format(a) : yt.format(a);
+function is(s, t) {
+  const a = et(s), o = re(a) - re(t);
+  return o === 0 ? "Today" : o === 1 ? "Tomorrow" : o < 0 ? `${Qe.format(a)} (passed)` : a.getFullYear() === t.getFullYear() ? Qe.format(a) : kt.format(a);
 }
-function kt(s) {
+function vt(s) {
   if (s.unit === "day") return s.amount === 1 ? "1 day" : `${s.amount} days`;
   const t = Math.floor(s.amount / 60), a = s.amount % 60;
   return t && a ? `${t}h ${a}m` : t ? `${t}h` : `${a}m`;
@@ -35,179 +35,179 @@ function Pe(s, t) {
   const a = s.due?.datetime ? new Date(s.due.datetime).getTime() : Number.POSITIVE_INFINITY, o = t.due?.datetime ? new Date(t.due.datetime).getTime() : Number.POSITIVE_INFINITY;
   return a !== o ? a - o : s.priority !== t.priority ? t.priority - s.priority : s.order - t.order;
 }
-function as(s, t) {
+function ls(s, t) {
   const a = [], o = [];
   for (const c of s) (Re(c.due, t) === "overdue" ? a : o).push(c);
   a.sort((c, r) => (c.due && r.due ? Ce(c.due) - Ce(r.due) : 0) || Pe(c, r)), o.sort(Pe);
-  const u = [];
-  return a.length && u.push({ key: "overdue", title: "Overdue", tone: "overdue", tasks: a }), u.push({ key: "today", title: "Today", subtitle: Ze.format(t), tone: "today", tasks: o }), u;
+  const m = [];
+  return a.length && m.push({ key: "overdue", title: "Overdue", tone: "overdue", tasks: a }), m.push({ key: "today", title: "Today", subtitle: tt.format(t), tone: "today", tasks: o }), m;
 }
-function is(s, t) {
-  const a = le(t), o = /* @__PURE__ */ new Map(), u = [], c = [];
+function rs(s, t) {
+  const a = re(t), o = /* @__PURE__ */ new Map(), m = [], c = [];
   for (const x of s) {
     if (!x.due) {
       c.push(x);
       continue;
     }
-    const p = Ce(x.due);
-    if (p < a) {
-      u.push(x);
+    const h = Ce(x.due);
+    if (h < a) {
+      m.push(x);
       continue;
     }
-    const f = o.get(p) ?? [];
-    f.push(x), o.set(p, f);
+    const f = o.get(h) ?? [];
+    f.push(x), o.set(h, f);
   }
   const r = [];
-  u.length && r.push({ key: "overdue", title: "Overdue", tone: "overdue", tasks: u.sort(Pe) });
-  for (const x of [...o.keys()].sort((p, f) => p - f)) {
-    const p = new Date(x * Je), f = new Date(p.getUTCFullYear(), p.getUTCMonth(), p.getUTCDate()), v = x === a ? "Today" : x === a + 1 ? "Tomorrow" : bt.format(f);
+  m.length && r.push({ key: "overdue", title: "Overdue", tone: "overdue", tasks: m.sort(Pe) });
+  for (const x of [...o.keys()].sort((h, f) => h - f)) {
+    const h = new Date(x * Ze), f = new Date(h.getUTCFullYear(), h.getUTCMonth(), h.getUTCDate()), y = x === a ? "Today" : x === a + 1 ? "Tomorrow" : yt.format(f);
     r.push({
       key: `day-${x}`,
-      title: v,
-      subtitle: Ze.format(f),
+      title: y,
+      subtitle: tt.format(f),
       tone: x === a ? "today" : x === a + 1 ? "tomorrow" : "future",
       tasks: o.get(x).sort(Pe)
     });
   }
   return c.length && r.push({ key: "undated", title: "No date", tasks: c }), r;
 }
-function ls(s, t) {
-  const a = le(t), o = /* @__PURE__ */ new Map();
-  for (const u of s) {
-    const c = u.completedAt ? le(new Date(u.completedAt)) : a, r = o.get(c) ?? [];
-    r.push(u), o.set(c, r);
+function os(s, t) {
+  const a = re(t), o = /* @__PURE__ */ new Map();
+  for (const m of s) {
+    const c = m.completedAt ? re(new Date(m.completedAt)) : a, r = o.get(c) ?? [];
+    r.push(m), o.set(c, r);
   }
-  return [...o.keys()].sort((u, c) => c - u).map((u) => {
-    const c = new Date(u * Je), r = new Date(c.getUTCFullYear(), c.getUTCMonth(), c.getUTCDate());
+  return [...o.keys()].sort((m, c) => c - m).map((m) => {
+    const c = new Date(m * Ze), r = new Date(c.getUTCFullYear(), c.getUTCMonth(), c.getUTCDate());
     return {
-      key: `done-${u}`,
-      title: u === a ? "Today" : u === a - 1 ? "Yesterday" : Ze.format(r),
-      tasks: o.get(u).sort((x, p) => (p.completedAt ?? "").localeCompare(x.completedAt ?? ""))
+      key: `done-${m}`,
+      title: m === a ? "Today" : m === a - 1 ? "Yesterday" : tt.format(r),
+      tasks: o.get(m).sort((x, h) => (h.completedAt ?? "").localeCompare(x.completedAt ?? ""))
     };
   });
 }
-function rs(s) {
+function cs(s) {
   return document.addEventListener("keydown", s), () => document.removeEventListener("keydown", s);
 }
-function os(s) {
+function ds(s) {
   return s instanceof Element && !!s.closest('button, a[href], summary, select, [role="button"], [role="menuitem"], [role="menuitemcheckbox"], [role="option"], [role="checkbox"], [role="tab"], [role="switch"]');
 }
-const cs = d.forwardRef(function({ placeholder: t, contextLabel: a, disabled: o, onSubmit: u, autoFocus: c, large: r }, x) {
-  const [p, f] = d.useState(""), [v, D] = d.useState(0), g = v > 0, C = d.useRef(null), k = d.useRef(null);
-  d.useImperativeHandle(x, () => ({ focus: () => C.current?.focus() }), []);
-  const $ = () => {
-    k.current && C.current && (k.current.scrollLeft = C.current.scrollLeft);
-  }, A = async () => {
-    const y = p.trim();
-    if (y) {
-      f(""), D((l) => l + 1);
+const us = d.forwardRef(function({ placeholder: t, contextLabel: a, disabled: o, onSubmit: m, autoFocus: c, large: r }, x) {
+  const [h, f] = d.useState(""), [y, N] = d.useState(0), g = y > 0, D = d.useRef(null), k = d.useRef(null);
+  d.useImperativeHandle(x, () => ({ focus: () => D.current?.focus() }), []);
+  const A = () => {
+    k.current && D.current && (k.current.scrollLeft = D.current.scrollLeft);
+  }, P = async () => {
+    const v = h.trim();
+    if (v) {
+      f(""), N((l) => l + 1);
       try {
-        await u(y) || f((l) => l || y);
+        await m(v) || f((l) => l || v);
       } finally {
-        D((l) => l - 1), requestAnimationFrame(() => C.current?.focus());
+        N((l) => l - 1), requestAnimationFrame(() => D.current?.focus());
       }
     }
-  }, O = At(p), S = p ? Rt(p) : "", w = O.some((y) => y.kind !== "text");
+  }, z = Pt(h), $ = h ? Mt(h) : "", S = z.some((v) => v.kind !== "text");
   return /* @__PURE__ */ e.jsxs("div", { className: `td-quickadd${r ? " is-large" : ""}${g ? " is-busy" : ""}`, children: [
     /* @__PURE__ */ e.jsxs("div", { className: "td-quickadd-field", children: [
       /* @__PURE__ */ e.jsx("span", { className: "td-quickadd-plus", children: /* @__PURE__ */ e.jsx(Ne, {}) }),
       /* @__PURE__ */ e.jsxs("div", { className: "td-quickadd-stack", children: [
         /* @__PURE__ */ e.jsxs("div", { ref: k, className: "td-quickadd-mirror", "aria-hidden": "true", children: [
-          O.map((y, l) => /* @__PURE__ */ e.jsx("span", { className: `tok-${y.kind}`, children: y.text }, l)),
+          z.map((v, l) => /* @__PURE__ */ e.jsx("span", { className: `tok-${v.kind}`, children: v.text }, l)),
           "​"
         ] }),
         /* @__PURE__ */ e.jsx(
           "input",
           {
-            ref: C,
+            ref: D,
             className: "td-quickadd-input",
-            value: p,
+            value: h,
             disabled: o,
             autoFocus: c,
             spellCheck: !1,
             placeholder: t,
             "aria-label": "Quick add task",
-            onChange: (y) => {
-              f(y.target.value), requestAnimationFrame($);
+            onChange: (v) => {
+              f(v.target.value), requestAnimationFrame(A);
             },
-            onScroll: $,
-            onKeyDown: (y) => {
-              y.key === "Enter" && !y.nativeEvent.isComposing ? (y.preventDefault(), A()) : y.key === "Escape" && p ? (y.preventDefault(), y.stopPropagation(), f("")) : y.key === "Escape" && (y.preventDefault(), y.stopPropagation(), C.current?.blur());
+            onScroll: A,
+            onKeyDown: (v) => {
+              v.key === "Enter" && !v.nativeEvent.isComposing ? (v.preventDefault(), P()) : v.key === "Escape" && h ? (v.preventDefault(), v.stopPropagation(), f("")) : v.key === "Escape" && (v.preventDefault(), v.stopPropagation(), D.current?.blur());
             }
           }
         )
       ] }),
-      /* @__PURE__ */ e.jsx("button", { type: "button", className: "td-btn td-btn-primary td-quickadd-submit", disabled: !p.trim() || o, onClick: () => void A(), children: g && !p.trim() ? /* @__PURE__ */ e.jsx("span", { className: "td-spinner" }) : "Add" })
+      /* @__PURE__ */ e.jsx("button", { type: "button", className: "td-btn td-btn-primary td-quickadd-submit", disabled: !h.trim() || o, onClick: () => void P(), children: g && !h.trim() ? /* @__PURE__ */ e.jsx("span", { className: "td-spinner" }) : "Add" })
     ] }),
-    (w || a) && /* @__PURE__ */ e.jsxs("div", { className: "td-quickadd-hint", children: [
-      w && S ? /* @__PURE__ */ e.jsxs("span", { children: [
+    (S || a) && /* @__PURE__ */ e.jsxs("div", { className: "td-quickadd-hint", children: [
+      S && $ ? /* @__PURE__ */ e.jsxs("span", { children: [
         "Adds “",
-        /* @__PURE__ */ e.jsx("b", { children: S }),
+        /* @__PURE__ */ e.jsx("b", { children: $ }),
         "”"
       ] }) : null,
       a ? /* @__PURE__ */ e.jsx("span", { className: "td-dim", children: a }) : null
     ] })
   ] });
 });
-function vt(s, t) {
+function gt(s, t) {
   return s.kind === t.kind && (s.id ?? null) === (t.id ?? null) && (s.query ?? null) === (t.query ?? null);
 }
-function ds({ meta: s, current: t, counts: a, user: o, onSelect: u, onSearch: c, onCreateProject: r, onCreateLabel: x, onSignOut: p }) {
-  const [f, v] = d.useState({ favorites: !0, projects: !0, labels: !1, filters: !1 }), [D, g] = d.useState(null), [C, k] = d.useState(""), [$, A] = d.useState("charcoal"), O = s?.projects.find((l) => l.isInbox), S = (l, F, I, Q, Z) => /* @__PURE__ */ e.jsxs(
+function ms({ meta: s, current: t, counts: a, user: o, onSelect: m, onSearch: c, onCreateProject: r, onCreateLabel: x, onSignOut: h }) {
+  const [f, y] = d.useState({ favorites: !0, projects: !0, labels: !1, filters: !1 }), [N, g] = d.useState(null), [D, k] = d.useState(""), [A, P] = d.useState("charcoal"), z = s?.projects.find((l) => l.isInbox), $ = (l, q, E, G, ee) => /* @__PURE__ */ e.jsxs(
     "button",
     {
-      className: `td-nav-item${vt(t, l) ? " is-active" : ""}`,
-      onClick: () => u(l),
-      title: I,
+      className: `td-nav-item${gt(t, l) ? " is-active" : ""}`,
+      onClick: () => m(l),
+      title: E,
       children: [
-        /* @__PURE__ */ e.jsx("span", { className: "td-nav-icon", style: Z ? { color: Z } : void 0, children: F }),
-        /* @__PURE__ */ e.jsx("span", { className: "td-nav-label", children: I }),
-        Q ? /* @__PURE__ */ e.jsx("span", { className: "td-nav-count", children: Q }) : null
+        /* @__PURE__ */ e.jsx("span", { className: "td-nav-icon", style: ee ? { color: ee } : void 0, children: q }),
+        /* @__PURE__ */ e.jsx("span", { className: "td-nav-label", children: E }),
+        G ? /* @__PURE__ */ e.jsx("span", { className: "td-nav-count", children: G }) : null
       ]
     },
     `${l.kind}:${l.id ?? l.query ?? ""}`
-  ), w = [
-    ...s?.projects.filter((l) => l.isFavorite && !l.isInbox).map((l) => S({ kind: "project", id: l.id }, /* @__PURE__ */ e.jsx("span", { className: "td-dot", style: { background: V(l.color) } }), l.name)) ?? [],
-    ...s?.labels.filter((l) => l.isFavorite).map((l) => S({ kind: "label", query: l.name }, /* @__PURE__ */ e.jsx(Ae, {}), l.name, null, V(l.color))) ?? [],
-    ...s?.filters.filter((l) => l.isFavorite).map((l) => S({ kind: "filter", id: l.id, query: l.query }, /* @__PURE__ */ e.jsx(it, {}), l.name, null, V(l.color))) ?? []
-  ], y = async (l) => {
+  ), S = [
+    ...s?.projects.filter((l) => l.isFavorite && !l.isInbox).map((l) => $({ kind: "project", id: l.id }, /* @__PURE__ */ e.jsx("span", { className: "td-dot", style: { background: Q(l.color) } }), l.name)) ?? [],
+    ...s?.labels.filter((l) => l.isFavorite).map((l) => $({ kind: "label", query: l.name }, /* @__PURE__ */ e.jsx(Ae, {}), l.name, null, Q(l.color))) ?? [],
+    ...s?.filters.filter((l) => l.isFavorite).map((l) => $({ kind: "filter", id: l.id, query: l.query }, /* @__PURE__ */ e.jsx(lt, {}), l.name, null, Q(l.color))) ?? []
+  ], v = async (l) => {
     l.preventDefault();
-    const F = C.trim();
-    !F || !(D === "project" ? await r(F, $) : D === "label" && await x(F)) || (k(""), g(null));
+    const q = D.trim();
+    !q || !(N === "project" ? await r(q, A) : N === "label" && await x(q)) || (k(""), g(null));
   };
   return /* @__PURE__ */ e.jsxs("nav", { className: "td-sidebar", "aria-label": "Todoist navigation", children: [
     /* @__PURE__ */ e.jsxs("div", { className: "td-nav-group", children: [
       /* @__PURE__ */ e.jsxs("button", { className: "td-nav-item", onClick: c, title: "Search (/)", children: [
-        /* @__PURE__ */ e.jsx("span", { className: "td-nav-icon", children: /* @__PURE__ */ e.jsx(dt, {}) }),
+        /* @__PURE__ */ e.jsx("span", { className: "td-nav-icon", children: /* @__PURE__ */ e.jsx(ut, {}) }),
         /* @__PURE__ */ e.jsx("span", { className: "td-nav-label", children: "Search" }),
         /* @__PURE__ */ e.jsx("kbd", { children: "/" })
       ] }),
-      S({ kind: "inbox" }, /* @__PURE__ */ e.jsx(Me, {}), "Inbox", a.inbox, "#246fe0"),
-      S({ kind: "today" }, /* @__PURE__ */ e.jsx(Pt, {}), "Today", a.today, "#058527"),
-      S({ kind: "upcoming" }, /* @__PURE__ */ e.jsx(qt, {}), "Upcoming", null, "#692fc2"),
-      S({ kind: "completed" }, /* @__PURE__ */ e.jsx(zt, {}), "Completed", null, "#eb8909")
+      $({ kind: "inbox" }, /* @__PURE__ */ e.jsx(Me, {}), "Inbox", a.inbox, "#246fe0"),
+      $({ kind: "today" }, /* @__PURE__ */ e.jsx(Ft, {}), "Today", a.today, "#058527"),
+      $({ kind: "upcoming" }, /* @__PURE__ */ e.jsx(Kt, {}), "Upcoming", null, "#692fc2"),
+      $({ kind: "completed" }, /* @__PURE__ */ e.jsx(_t, {}), "Completed", null, "#eb8909")
     ] }),
-    w.length > 0 && /* @__PURE__ */ e.jsx($e, { title: "Favorites", open: f.favorites, onToggle: () => v((l) => ({ ...l, favorites: !l.favorites })), children: w }),
+    S.length > 0 && /* @__PURE__ */ e.jsx($e, { title: "Favorites", open: f.favorites, onToggle: () => y((l) => ({ ...l, favorites: !l.favorites })), children: S }),
     /* @__PURE__ */ e.jsxs(
       $e,
       {
         title: "My Projects",
         open: f.projects,
-        onToggle: () => v((l) => ({ ...l, projects: !l.projects })),
+        onToggle: () => y((l) => ({ ...l, projects: !l.projects })),
         onAdd: () => {
-          g("project"), k(""), v((l) => ({ ...l, projects: !0 }));
+          g("project"), k(""), y((l) => ({ ...l, projects: !0 }));
         },
         children: [
-          !s && /* @__PURE__ */ e.jsx(us, {}),
-          s && Mt(s.projects).filter(({ project: l }) => l.id !== O?.id).map(({ project: l, depth: F }) => /* @__PURE__ */ e.jsx("div", { style: { paddingLeft: F * 12 }, children: S({ kind: "project", id: l.id }, /* @__PURE__ */ e.jsx("span", { className: "td-dot", style: { background: V(l.color) } }), l.name) }, l.id)),
-          D === "project" && /* @__PURE__ */ e.jsxs("form", { className: "td-nav-add", onSubmit: (l) => void y(l), children: [
-            /* @__PURE__ */ e.jsx("input", { autoFocus: !0, value: C, onChange: (l) => k(l.target.value), placeholder: "Project name", onKeyDown: (l) => {
+          !s && /* @__PURE__ */ e.jsx(ps, {}),
+          s && Lt(s.projects).filter(({ project: l }) => l.id !== z?.id).map(({ project: l, depth: q }) => /* @__PURE__ */ e.jsx("div", { style: { paddingLeft: q * 12 }, children: $({ kind: "project", id: l.id }, /* @__PURE__ */ e.jsx("span", { className: "td-dot", style: { background: Q(l.color) } }), l.name) }, l.id)),
+          N === "project" && /* @__PURE__ */ e.jsxs("form", { className: "td-nav-add", onSubmit: (l) => void v(l), children: [
+            /* @__PURE__ */ e.jsx("input", { autoFocus: !0, value: D, onChange: (l) => k(l.target.value), placeholder: "Project name", onKeyDown: (l) => {
               l.key === "Escape" && (l.preventDefault(), l.stopPropagation(), g(null));
             } }),
-            /* @__PURE__ */ e.jsx("div", { className: "td-swatches", children: Ft.map((l) => /* @__PURE__ */ e.jsx("button", { type: "button", title: l.replace("_", " "), className: `td-swatch${l === $ ? " is-on" : ""}`, style: { background: V(l) }, onClick: () => A(l) }, l)) }),
+            /* @__PURE__ */ e.jsx("div", { className: "td-swatches", children: Ot.map((l) => /* @__PURE__ */ e.jsx("button", { type: "button", title: l.replace("_", " "), className: `td-swatch${l === A ? " is-on" : ""}`, style: { background: Q(l) }, onClick: () => P(l) }, l)) }),
             /* @__PURE__ */ e.jsxs("div", { className: "td-nav-add-actions", children: [
               /* @__PURE__ */ e.jsx("button", { type: "button", className: "td-btn td-btn-ghost", onClick: () => g(null), children: "Cancel" }),
-              /* @__PURE__ */ e.jsx("button", { className: "td-btn td-btn-primary", disabled: !C.trim(), children: "Add project" })
+              /* @__PURE__ */ e.jsx("button", { className: "td-btn td-btn-primary", disabled: !D.trim(), children: "Add project" })
             ] })
           ] })
         ]
@@ -218,64 +218,64 @@ function ds({ meta: s, current: t, counts: a, user: o, onSelect: u, onSearch: c,
       {
         title: "Labels",
         open: f.labels,
-        onToggle: () => v((l) => ({ ...l, labels: !l.labels })),
+        onToggle: () => y((l) => ({ ...l, labels: !l.labels })),
         onAdd: () => {
-          g("label"), k(""), v((l) => ({ ...l, labels: !0 }));
+          g("label"), k(""), y((l) => ({ ...l, labels: !0 }));
         },
         children: [
-          s?.labels.map((l) => S({ kind: "label", query: l.name }, /* @__PURE__ */ e.jsx(Ae, {}), l.name, null, V(l.color))),
-          s && !s.labels.length && D !== "label" && /* @__PURE__ */ e.jsx("div", { className: "td-nav-empty", children: "No labels" }),
-          D === "label" && /* @__PURE__ */ e.jsxs("form", { className: "td-nav-add", onSubmit: (l) => void y(l), children: [
-            /* @__PURE__ */ e.jsx("input", { autoFocus: !0, value: C, onChange: (l) => k(l.target.value), placeholder: "Label name", onKeyDown: (l) => {
+          s?.labels.map((l) => $({ kind: "label", query: l.name }, /* @__PURE__ */ e.jsx(Ae, {}), l.name, null, Q(l.color))),
+          s && !s.labels.length && N !== "label" && /* @__PURE__ */ e.jsx("div", { className: "td-nav-empty", children: "No labels" }),
+          N === "label" && /* @__PURE__ */ e.jsxs("form", { className: "td-nav-add", onSubmit: (l) => void v(l), children: [
+            /* @__PURE__ */ e.jsx("input", { autoFocus: !0, value: D, onChange: (l) => k(l.target.value), placeholder: "Label name", onKeyDown: (l) => {
               l.key === "Escape" && (l.preventDefault(), l.stopPropagation(), g(null));
             } }),
             /* @__PURE__ */ e.jsxs("div", { className: "td-nav-add-actions", children: [
               /* @__PURE__ */ e.jsx("button", { type: "button", className: "td-btn td-btn-ghost", onClick: () => g(null), children: "Cancel" }),
-              /* @__PURE__ */ e.jsx("button", { className: "td-btn td-btn-primary", disabled: !C.trim(), children: "Add label" })
+              /* @__PURE__ */ e.jsx("button", { className: "td-btn td-btn-primary", disabled: !D.trim(), children: "Add label" })
             ] })
           ] })
         ]
       }
     ),
-    s && s.filters.length > 0 && /* @__PURE__ */ e.jsx($e, { title: "Filters", open: f.filters, onToggle: () => v((l) => ({ ...l, filters: !l.filters })), children: s.filters.map((l) => S({ kind: "filter", id: l.id, query: l.query }, /* @__PURE__ */ e.jsx(it, {}), l.name, null, V(l.color))) }),
+    s && s.filters.length > 0 && /* @__PURE__ */ e.jsx($e, { title: "Filters", open: f.filters, onToggle: () => y((l) => ({ ...l, filters: !l.filters })), children: s.filters.map((l) => $({ kind: "filter", id: l.id, query: l.query }, /* @__PURE__ */ e.jsx(lt, {}), l.name, null, Q(l.color))) }),
     o && /* @__PURE__ */ e.jsxs("div", { className: "td-account", children: [
       /* @__PURE__ */ e.jsx("span", { className: "td-avatar", children: (o.fullName || o.email || "?").slice(0, 1).toUpperCase() }),
       /* @__PURE__ */ e.jsxs("span", { className: "td-account-text", children: [
         /* @__PURE__ */ e.jsx("span", { children: o.fullName || o.email }),
         o.readOnly && /* @__PURE__ */ e.jsx("span", { className: "td-dim td-small", children: "Read-only" })
       ] }),
-      /* @__PURE__ */ e.jsx("button", { className: "td-icon-btn sm", title: "Sign out of td", onClick: p, children: /* @__PURE__ */ e.jsx(Lt, { size: 13 }) })
+      /* @__PURE__ */ e.jsx("button", { className: "td-icon-btn sm", title: "Sign out of td", onClick: h, children: /* @__PURE__ */ e.jsx(qt, { size: 13 }) })
     ] })
   ] });
 }
-function $e({ title: s, open: t, onToggle: a, onAdd: o, children: u }) {
+function $e({ title: s, open: t, onToggle: a, onAdd: o, children: m }) {
   return /* @__PURE__ */ e.jsxs("div", { className: "td-nav-group", children: [
     /* @__PURE__ */ e.jsxs("div", { className: "td-nav-heading", children: [
       /* @__PURE__ */ e.jsxs("button", { className: "td-nav-heading-btn", onClick: a, "aria-expanded": t, children: [
-        /* @__PURE__ */ e.jsx(Ot, { size: 12, className: t ? "" : "is-collapsed" }),
+        /* @__PURE__ */ e.jsx(zt, { size: 12, className: t ? "" : "is-collapsed" }),
         s
       ] }),
       o && /* @__PURE__ */ e.jsx("button", { className: "td-icon-btn sm", title: `Add ${s.toLowerCase().replace("my ", "").replace(/s$/, "")}`, onClick: o, children: /* @__PURE__ */ e.jsx(Ne, { size: 12 }) })
     ] }),
-    t && u
+    t && m
   ] });
 }
-function us() {
+function ps() {
   return /* @__PURE__ */ e.jsx(e.Fragment, { children: [70, 55, 80].map((s) => /* @__PURE__ */ e.jsx("div", { className: "td-nav-item", children: /* @__PURE__ */ e.jsx("span", { className: "td-skel", style: { width: `${s}%` } }) }, s)) });
 }
-const Ye = /(\*\*([^*]+)\*\*|__([^_]+)__|\*([^*\s][^*]*)\*|_([^_\s][^_]*)_|`([^`]+)`|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s<>()]+[^\s<>().,;:!?'"]))/g;
-function je(s, t, a = "i") {
+const We = /(\*\*([^*]+)\*\*|__([^_]+)__|\*([^*\s][^*]*)\*|_([^_\s][^_]*)_|`([^`]+)`|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s<>()]+[^\s<>().,;:!?'"]))/g;
+function xe(s, t, a = "i") {
   const o = [];
-  let u = 0, c = 0;
-  Ye.lastIndex = 0;
-  for (let r = Ye.exec(s); r; r = Ye.exec(s)) {
-    r.index > u && o.push(s.slice(u, r.index));
+  let m = 0, c = 0;
+  We.lastIndex = 0;
+  for (let r = We.exec(s); r; r = We.exec(s)) {
+    r.index > m && o.push(s.slice(m, r.index));
     const x = `${a}${c++}`;
-    r[2] || r[3] ? o.push(/* @__PURE__ */ e.jsx("strong", { children: r[2] ?? r[3] }, x)) : r[4] || r[5] ? o.push(/* @__PURE__ */ e.jsx("em", { children: r[4] ?? r[5] }, x)) : r[6] ? o.push(/* @__PURE__ */ e.jsx("code", { children: r[6] }, x)) : r[7] && r[8] ? o.push(/* @__PURE__ */ e.jsx(rt, { url: r[8], open: t, children: r[7] }, x)) : r[9] && o.push(/* @__PURE__ */ e.jsx(rt, { url: r[9], open: t, children: ms(r[9]) }, x)), u = r.index + r[0].length;
+    r[2] || r[3] ? o.push(/* @__PURE__ */ e.jsx("strong", { children: r[2] ?? r[3] }, x)) : r[4] || r[5] ? o.push(/* @__PURE__ */ e.jsx("em", { children: r[4] ?? r[5] }, x)) : r[6] ? o.push(/* @__PURE__ */ e.jsx("code", { children: r[6] }, x)) : r[7] && r[8] ? o.push(/* @__PURE__ */ e.jsx(ot, { url: r[8], open: t, children: r[7] }, x)) : r[9] && o.push(/* @__PURE__ */ e.jsx(ot, { url: r[9], open: t, children: hs(r[9]) }, x)), m = r.index + r[0].length;
   }
-  return u < s.length && o.push(s.slice(u)), o;
+  return m < s.length && o.push(s.slice(m)), o;
 }
-function ms(s) {
+function hs(s) {
   try {
     const t = new URL(s), a = t.pathname.length > 28 ? `${t.pathname.slice(0, 26)}…` : t.pathname;
     return `${t.hostname.replace(/^www\./, "")}${a === "/" ? "" : a}`;
@@ -283,7 +283,7 @@ function ms(s) {
     return s;
   }
 }
-function rt({ url: s, open: t, children: a }) {
+function ot({ url: s, open: t, children: a }) {
   return /* @__PURE__ */ e.jsx(
     "a",
     {
@@ -297,114 +297,114 @@ function rt({ url: s, open: t, children: a }) {
     }
   );
 }
-function ot({ text: s, open: t }) {
+function ct({ text: s, open: t }) {
   const a = s.replace(/\r\n/g, `
 `).split(`
 `), o = [];
-  let u = 0, c = 0;
-  for (; u < a.length; ) {
-    const r = a[u];
+  let m = 0, c = 0;
+  for (; m < a.length; ) {
+    const r = a[m];
     if (r.startsWith("```")) {
-      const p = [];
-      for (u++; u < a.length && !a[u].startsWith("```"); ) p.push(a[u++]);
-      u++, o.push(/* @__PURE__ */ e.jsx("pre", { className: "td-md-pre", children: /* @__PURE__ */ e.jsx("code", { children: p.join(`
+      const h = [];
+      for (m++; m < a.length && !a[m].startsWith("```"); ) h.push(a[m++]);
+      m++, o.push(/* @__PURE__ */ e.jsx("pre", { className: "td-md-pre", children: /* @__PURE__ */ e.jsx("code", { children: h.join(`
 `) }) }, c++));
       continue;
     }
     if (/^\s*[-*]\s+/.test(r)) {
-      const p = [];
-      for (; u < a.length && /^\s*[-*]\s+/.test(a[u]); ) p.push(a[u++].replace(/^\s*[-*]\s+/, ""));
-      o.push(/* @__PURE__ */ e.jsx("ul", { children: p.map((f, v) => /* @__PURE__ */ e.jsx("li", { children: je(f, t, `l${c}-${v}`) }, v)) }, c++));
+      const h = [];
+      for (; m < a.length && /^\s*[-*]\s+/.test(a[m]); ) h.push(a[m++].replace(/^\s*[-*]\s+/, ""));
+      o.push(/* @__PURE__ */ e.jsx("ul", { children: h.map((f, y) => /* @__PURE__ */ e.jsx("li", { children: xe(f, t, `l${c}-${y}`) }, y)) }, c++));
       continue;
     }
     if (/^\s*\d+[.)]\s+/.test(r)) {
-      const p = [];
-      for (; u < a.length && /^\s*\d+[.)]\s+/.test(a[u]); ) p.push(a[u++].replace(/^\s*\d+[.)]\s+/, ""));
-      o.push(/* @__PURE__ */ e.jsx("ol", { children: p.map((f, v) => /* @__PURE__ */ e.jsx("li", { children: je(f, t, `o${c}-${v}`) }, v)) }, c++));
+      const h = [];
+      for (; m < a.length && /^\s*\d+[.)]\s+/.test(a[m]); ) h.push(a[m++].replace(/^\s*\d+[.)]\s+/, ""));
+      o.push(/* @__PURE__ */ e.jsx("ol", { children: h.map((f, y) => /* @__PURE__ */ e.jsx("li", { children: xe(f, t, `o${c}-${y}`) }, y)) }, c++));
       continue;
     }
     if (r.startsWith("> ")) {
-      const p = [];
-      for (; u < a.length && a[u].startsWith("> "); ) p.push(a[u++].slice(2));
-      o.push(/* @__PURE__ */ e.jsx("blockquote", { children: je(p.join(" "), t, `q${c}`) }, c++));
+      const h = [];
+      for (; m < a.length && a[m].startsWith("> "); ) h.push(a[m++].slice(2));
+      o.push(/* @__PURE__ */ e.jsx("blockquote", { children: xe(h.join(" "), t, `q${c}`) }, c++));
       continue;
     }
     if (!r.trim()) {
-      u++;
+      m++;
       continue;
     }
     const x = [];
-    for (; u < a.length && a[u].trim() && !/^(```|\s*[-*]\s+|\s*\d+[.)]\s+|> )/.test(a[u]); ) x.push(a[u++]);
+    for (; m < a.length && a[m].trim() && !/^(```|\s*[-*]\s+|\s*\d+[.)]\s+|> )/.test(a[m]); ) x.push(a[m++]);
     o.push(
-      /* @__PURE__ */ e.jsx("p", { children: x.map((p, f) => /* @__PURE__ */ e.jsxs(d.Fragment, { children: [
+      /* @__PURE__ */ e.jsx("p", { children: x.map((h, f) => /* @__PURE__ */ e.jsxs(d.Fragment, { children: [
         f > 0 && /* @__PURE__ */ e.jsx("br", {}),
-        je(p, t, `p${c}-${f}`)
+        xe(h, t, `p${c}-${f}`)
       ] }, f)) }, c++)
     );
   }
   return /* @__PURE__ */ e.jsx("div", { className: "td-md", children: o });
 }
-const gt = ["15m", "30m", "45m", "1h", "1h30m", "2h", "3h", "4h"];
-function ps({ taskId: s, meta: t, now: a, revision: o, onClose: u, onToggle: c, onOpenTask: r, onError: x, onOpenUrl: p, onCreateLabel: f, onNeedSections: v }) {
-  const D = Qe(), [g, C] = d.useState(null), [k, $] = d.useState(null), [A, O] = d.useState(null), [S, w] = d.useState(""), y = d.useRef(null), l = d.useRef(""), F = d.useRef(null), I = (n) => {
-    y.current = n, O(n);
-  }, Q = (n) => {
-    l.current = n, w(n);
-  }, [Z, ee] = d.useState(null), [Fe, be] = d.useState(!1), [re, ue] = d.useState(""), [te, U] = d.useState(""), [K, ye] = d.useState(!1), Y = { due: d.useRef(null), priority: d.useRef(null), labels: d.useRef(null), project: d.useRef(null) }, B = async () => {
+const Nt = ["15m", "30m", "45m", "1h", "1h30m", "2h", "3h", "4h"];
+function fs({ taskId: s, meta: t, now: a, revision: o, onClose: m, onToggle: c, onOpenTask: r, onError: x, onOpenUrl: h, onCreateLabel: f, onNeedSections: y }) {
+  const N = Je(), [g, D] = d.useState(null), [k, A] = d.useState(null), [P, z] = d.useState(null), [$, S] = d.useState(""), v = d.useRef(null), l = d.useRef(""), q = d.useRef(null), E = (n) => {
+    v.current = n, z(n);
+  }, G = (n) => {
+    l.current = n, S(n);
+  }, [ee, te] = d.useState(null), [Fe, je] = d.useState(!1), [oe, J] = d.useState(""), [se, _] = d.useState(""), [U, be] = d.useState(!1), B = { due: d.useRef(null), priority: d.useRef(null), labels: d.useRef(null), project: d.useRef(null) }, W = async () => {
     try {
-      $(null), C(await D.call("task", { id: s }));
+      A(null), D(await N.call("task", { id: s }));
     } catch (n) {
-      $(X(n));
+      A(Z(n));
     }
   };
   d.useEffect(() => {
-    C(null), I(null), be(!1), ue(""), B();
+    D(null), E(null), je(!1), J(""), W();
   }, [s]);
-  const ke = d.useRef(o);
+  const ye = d.useRef(o);
   d.useEffect(() => {
-    o !== ke.current && B();
-  }, [o]), F.current = g?.task ?? null, d.useEffect(() => () => {
-    const n = y.current, E = F.current;
-    if (!n || !E) return;
-    const T = ct(n, l.current, E);
-    T && D.call("update", { id: E.id, ...T }).catch((M) => x(X(M)));
+    o !== ye.current && W();
+  }, [o]), q.current = g?.task ?? null, d.useEffect(() => () => {
+    const n = v.current, T = q.current;
+    if (!n || !T) return;
+    const R = dt(n, l.current, T);
+    R && N.call("update", { id: T.id, ...R }).catch((L) => x(Z(L)));
   }, []);
-  const W = async (n) => {
+  const H = async (n) => {
     if (!g) return;
-    const E = g;
-    C({ ...g, task: { ...g.task, ...fs(n) } });
+    const T = g;
+    D({ ...g, task: { ...g.task, ...js(n) } });
     try {
-      const T = await D.call("update", { id: g.task.id, ...n });
-      C((M) => M && { ...M, task: T });
-    } catch (T) {
-      C(E), B(), x(X(T));
+      const R = await N.call("update", { id: g.task.id, ...n });
+      D((L) => L && { ...L, task: R });
+    } catch (R) {
+      D(T), W(), x(Z(R));
     }
-  }, we = async (n, E) => {
+  }, we = async (n, T) => {
     if (g)
       try {
-        await D.call("move", { id: g.task.id, projectId: n, ...E ? { sectionId: E } : { noSection: !0 } }), C({ ...g, task: { ...g.task, projectId: n, sectionId: E } });
-      } catch (T) {
-        x(X(T));
+        await N.call("move", { id: g.task.id, projectId: n, ...T ? { sectionId: T } : { noSection: !0 } }), D({ ...g, task: { ...g.task, projectId: n, sectionId: T } });
+      } catch (R) {
+        x(Z(R));
       }
-  }, ve = g?.task.projectId;
+  }, ke = g?.task.projectId;
   if (d.useEffect(() => {
-    ve && v(ve);
-  }, [ve, v]), k)
+    ke && y(ke);
+  }, [ke, y]), k)
     return /* @__PURE__ */ e.jsxs("aside", { className: "td-drawer", children: [
       /* @__PURE__ */ e.jsxs("div", { className: "td-drawer-head", children: [
         /* @__PURE__ */ e.jsx("span", {}),
-        /* @__PURE__ */ e.jsx("button", { className: "td-icon-btn", onClick: u, title: "Close (Esc)", children: /* @__PURE__ */ e.jsx(de, {}) })
+        /* @__PURE__ */ e.jsx("button", { className: "td-icon-btn", onClick: m, title: "Close (Esc)", children: /* @__PURE__ */ e.jsx(ue, {}) })
       ] }),
       /* @__PURE__ */ e.jsxs("div", { className: "td-empty", children: [
         /* @__PURE__ */ e.jsx("p", { children: k }),
-        /* @__PURE__ */ e.jsx("button", { className: "td-btn", onClick: () => void B(), children: "Try again" })
+        /* @__PURE__ */ e.jsx("button", { className: "td-btn", onClick: () => void W(), children: "Try again" })
       ] })
     ] });
   if (!g)
     return /* @__PURE__ */ e.jsxs("aside", { className: "td-drawer", children: [
       /* @__PURE__ */ e.jsxs("div", { className: "td-drawer-head", children: [
         /* @__PURE__ */ e.jsx("span", { className: "td-skel", style: { width: 120 } }),
-        /* @__PURE__ */ e.jsx("button", { className: "td-icon-btn", onClick: u, title: "Close (Esc)", children: /* @__PURE__ */ e.jsx(de, {}) })
+        /* @__PURE__ */ e.jsx("button", { className: "td-icon-btn", onClick: m, title: "Close (Esc)", children: /* @__PURE__ */ e.jsx(ue, {}) })
       ] }),
       /* @__PURE__ */ e.jsxs("div", { className: "td-drawer-body", children: [
         /* @__PURE__ */ e.jsx("div", { className: "td-skel", style: { width: "80%", height: 20, marginBottom: 14 } }),
@@ -412,28 +412,28 @@ function ps({ taskId: s, meta: t, now: a, revision: o, onClose: u, onToggle: c, 
         /* @__PURE__ */ e.jsx("div", { className: "td-skel", style: { width: "40%", marginTop: 8 } })
       ] })
     ] });
-  const { task: j, children: ne, comments: ae } = g, me = t.projects.find((n) => n.id === j.projectId), pe = t.sections.find((n) => n.id === j.sectionId), G = !!j.completedAt, he = Re(j.due, a), se = async () => {
-    const n = y.current;
+  const { task: j, children: ne, comments: ae } = g, me = t.projects.find((n) => n.id === j.projectId), pe = t.sections.find((n) => n.id === j.sectionId), ie = !!j.completedAt, ve = Re(j.due, a), he = async () => {
+    const n = v.current;
     if (!n) return;
-    I(null);
-    const E = ct(n, l.current, j);
-    E && await W(E);
+    E(null);
+    const T = dt(n, l.current, j);
+    T && await H(T);
   };
   return /* @__PURE__ */ e.jsxs("aside", { className: "td-drawer", "aria-label": "Task details", children: [
     /* @__PURE__ */ e.jsxs("div", { className: "td-drawer-head", children: [
-      /* @__PURE__ */ e.jsxs("button", { ref: Y.project, className: "td-crumb", onClick: () => ee("project"), title: "Move to project / section", children: [
-        me?.isInbox ? /* @__PURE__ */ e.jsx(Me, { size: 13 }) : /* @__PURE__ */ e.jsx("span", { className: "td-dot sm", style: { background: V(me?.color) } }),
+      /* @__PURE__ */ e.jsxs("button", { ref: B.project, className: "td-crumb", onClick: () => te("project"), title: "Move to project / section", children: [
+        me?.isInbox ? /* @__PURE__ */ e.jsx(Me, { size: 13 }) : /* @__PURE__ */ e.jsx("span", { className: "td-dot sm", style: { background: Q(me?.color) } }),
         /* @__PURE__ */ e.jsx("span", { children: me?.name ?? "Project" }),
         pe && /* @__PURE__ */ e.jsxs("span", { className: "td-dim", children: [
           "/ ",
           pe.name
         ] }),
-        /* @__PURE__ */ e.jsx(Kt, { size: 12, className: "td-crumb-move" })
+        /* @__PURE__ */ e.jsx(Ut, { size: 12, className: "td-crumb-move" })
       ] }),
       /* @__PURE__ */ e.jsxs("div", { className: "td-drawer-tools", children: [
-        /* @__PURE__ */ e.jsx("button", { className: "td-icon-btn", title: "Open in Todoist", onClick: () => p(j.url), children: /* @__PURE__ */ e.jsx(ut, {}) }),
-        /* @__PURE__ */ e.jsx("button", { className: "td-icon-btn danger", title: "Delete task", onClick: () => be(!0), children: /* @__PURE__ */ e.jsx(Ge, {}) }),
-        /* @__PURE__ */ e.jsx("button", { className: "td-icon-btn", title: "Close (Esc)", onClick: u, children: /* @__PURE__ */ e.jsx(de, {}) })
+        /* @__PURE__ */ e.jsx("button", { className: "td-icon-btn", title: "Open in Todoist", onClick: () => h(j.url), children: /* @__PURE__ */ e.jsx(mt, {}) }),
+        /* @__PURE__ */ e.jsx("button", { className: "td-icon-btn danger", title: "Delete task", onClick: () => je(!0), children: /* @__PURE__ */ e.jsx(Xe, {}) }),
+        /* @__PURE__ */ e.jsx("button", { className: "td-icon-btn", title: "Close (Esc)", onClick: m, children: /* @__PURE__ */ e.jsx(ue, {}) })
       ] })
     ] }),
     Fe && /* @__PURE__ */ e.jsxs("div", { className: "td-confirm", children: [
@@ -443,7 +443,7 @@ function ps({ taskId: s, meta: t, now: a, revision: o, onClose: u, onToggle: c, 
         "? This cannot be undone."
       ] }),
       /* @__PURE__ */ e.jsxs("div", { children: [
-        /* @__PURE__ */ e.jsx("button", { className: "td-btn", onClick: () => be(!1), children: "Cancel" }),
+        /* @__PURE__ */ e.jsx("button", { className: "td-btn", onClick: () => je(!1), children: "Cancel" }),
         /* @__PURE__ */ e.jsx(
           "button",
           {
@@ -451,9 +451,9 @@ function ps({ taskId: s, meta: t, now: a, revision: o, onClose: u, onToggle: c, 
             autoFocus: !0,
             onClick: async () => {
               try {
-                await D.call("delete", { id: j.id }), u();
+                await N.call("delete", { id: j.id }), m();
               } catch (n) {
-                x(X(n));
+                x(Z(n));
               }
             },
             children: "Delete"
@@ -463,7 +463,7 @@ function ps({ taskId: s, meta: t, now: a, revision: o, onClose: u, onToggle: c, 
     ] }),
     /* @__PURE__ */ e.jsxs("div", { className: "td-drawer-body", children: [
       j.parentId && /* @__PURE__ */ e.jsxs("button", { className: "td-parent-link", onClick: () => r(j.parentId), children: [
-        /* @__PURE__ */ e.jsx(Be, { size: 12 }),
+        /* @__PURE__ */ e.jsx(He, { size: 12 }),
         " Open parent task"
       ] }),
       /* @__PURE__ */ e.jsxs("div", { className: "td-drawer-title-row", children: [
@@ -471,68 +471,68 @@ function ps({ taskId: s, meta: t, now: a, revision: o, onClose: u, onToggle: c, 
           "button",
           {
             type: "button",
-            className: `td-checkbox lg p${j.priority}${G ? " is-checked" : ""}`,
+            className: `td-checkbox lg p${j.priority}${ie ? " is-checked" : ""}`,
             style: { "--prio": Ee[j.priority] },
-            "aria-label": G ? "Reopen task" : "Complete task",
+            "aria-label": ie ? "Reopen task" : "Complete task",
             onClick: async () => {
-              await c(j) && B();
+              await c(j) && W();
             },
             children: /* @__PURE__ */ e.jsx("svg", { viewBox: "0 0 16 16", "aria-hidden": "true", children: /* @__PURE__ */ e.jsx("path", { d: "m4.6 8.3 2.3 2.3 4.6-4.9" }) })
           }
         ),
-        A === "title" ? /* @__PURE__ */ e.jsx(
+        P === "title" ? /* @__PURE__ */ e.jsx(
           "textarea",
           {
             autoFocus: !0,
             className: "td-edit-title",
-            value: S,
-            rows: Math.min(5, Math.max(1, Math.ceil(S.length / 40))),
-            onChange: (n) => Q(n.target.value),
-            onBlur: () => void se(),
+            value: $,
+            rows: Math.min(5, Math.max(1, Math.ceil($.length / 40))),
+            onChange: (n) => G(n.target.value),
+            onBlur: () => void he(),
             onKeyDown: (n) => {
-              n.key === "Enter" && !n.shiftKey && (n.preventDefault(), se()), n.key === "Escape" && (n.preventDefault(), n.stopPropagation(), I(null));
+              n.key === "Enter" && !n.shiftKey && (n.preventDefault(), he()), n.key === "Escape" && (n.preventDefault(), n.stopPropagation(), E(null));
             }
           }
-        ) : /* @__PURE__ */ e.jsx("h2", { className: `td-drawer-title${G ? " is-done" : ""}`, onClick: () => {
-          Q(j.content), I("title");
-        }, title: "Click to edit", children: je(j.content, p, "title") })
+        ) : /* @__PURE__ */ e.jsx("h2", { className: `td-drawer-title${ie ? " is-done" : ""}`, onClick: () => {
+          G(j.content), E("title");
+        }, title: "Click to edit", children: xe(j.content, h, "title") })
       ] }),
-      A === "description" ? /* @__PURE__ */ e.jsxs("div", { className: "td-edit-desc-wrap", children: [
+      P === "description" ? /* @__PURE__ */ e.jsxs("div", { className: "td-edit-desc-wrap", children: [
         /* @__PURE__ */ e.jsx(
           "textarea",
           {
             autoFocus: !0,
             className: "td-edit-desc",
-            value: S,
+            value: $,
             placeholder: "Description (Markdown supported)",
-            onChange: (n) => Q(n.target.value),
+            onChange: (n) => G(n.target.value),
             onKeyDown: (n) => {
-              n.key === "Enter" && (n.metaKey || n.ctrlKey) && (n.preventDefault(), se()), n.key === "Escape" && (n.preventDefault(), n.stopPropagation(), I(null));
+              n.key === "Enter" && (n.metaKey || n.ctrlKey) && (n.preventDefault(), he()), n.key === "Escape" && (n.preventDefault(), n.stopPropagation(), E(null));
             }
           }
         ),
         /* @__PURE__ */ e.jsxs("div", { className: "td-edit-actions", children: [
           /* @__PURE__ */ e.jsx("span", { className: "td-dim", children: "⌘↵ to save" }),
-          /* @__PURE__ */ e.jsx("button", { className: "td-btn", onClick: () => I(null), children: "Cancel" }),
-          /* @__PURE__ */ e.jsx("button", { className: "td-btn td-btn-primary", onClick: () => void se(), children: "Save" })
+          /* @__PURE__ */ e.jsx("button", { className: "td-btn", onClick: () => E(null), children: "Cancel" }),
+          /* @__PURE__ */ e.jsx("button", { className: "td-btn td-btn-primary", onClick: () => void he(), children: "Save" })
         ] })
       ] }) : j.description ? /* @__PURE__ */ e.jsx("div", { className: "td-desc", onClick: (n) => {
-        n.target.closest("a") || (Q(j.description), I("description"));
-      }, title: "Click to edit", children: /* @__PURE__ */ e.jsx(ot, { text: j.description, open: p }) }) : /* @__PURE__ */ e.jsx("button", { className: "td-add-desc", onClick: () => {
-        Q(""), I("description");
+        n.target.closest("a") || (G(j.description), E("description"));
+      }, title: "Click to edit", children: /* @__PURE__ */ e.jsx(ct, { text: j.description, open: h }) }) : /* @__PURE__ */ e.jsx("button", { className: "td-add-desc", onClick: () => {
+        G(""), E("description");
       }, children: "Add description" }),
       /* @__PURE__ */ e.jsxs("div", { className: "td-props", children: [
         /* @__PURE__ */ e.jsxs("span", { className: "td-prop-label", children: [
-          /* @__PURE__ */ e.jsx(We, { size: 13 }),
+          /* @__PURE__ */ e.jsx(Ve, { size: 13 }),
           "Due"
         ] }),
-        /* @__PURE__ */ e.jsx("button", { ref: Y.due, className: `td-prop-value tone-${he}`, onClick: () => ee("due"), children: j.due ? /* @__PURE__ */ e.jsxs(e.Fragment, { children: [
-          j.due.recurring && /* @__PURE__ */ e.jsx(mt, { size: 12 }),
-          Ve(j.due, a),
+        /* @__PURE__ */ e.jsx("button", { ref: B.due, className: `td-prop-value tone-${ve}`, onClick: () => te("due"), children: j.due ? /* @__PURE__ */ e.jsxs(e.Fragment, { children: [
+          j.due.recurring && /* @__PURE__ */ e.jsx(pt, { size: 12 }),
+          Ge(j.due, a),
           /* @__PURE__ */ e.jsx("span", { className: "td-dim td-prop-sub", children: j.due.recurring ? j.due.string : "" })
         ] }) : /* @__PURE__ */ e.jsx("span", { className: "td-dim", children: "No date" }) }),
         /* @__PURE__ */ e.jsxs("span", { className: "td-prop-label", children: [
-          /* @__PURE__ */ e.jsx(pt, { size: 13 }),
+          /* @__PURE__ */ e.jsx(ht, { size: 13 }),
           "Deadline"
         ] }),
         /* @__PURE__ */ e.jsxs("span", { className: "td-prop-value-wrap", children: [
@@ -542,37 +542,37 @@ function ps({ taskId: s, meta: t, now: a, revision: o, onClose: u, onToggle: c, 
               type: "date",
               className: `td-date-input${j.deadline ? "" : " is-empty"}`,
               value: j.deadline ?? "",
-              onChange: (n) => void W({ deadline: n.target.value }),
+              onChange: (n) => void H({ deadline: n.target.value }),
               "aria-label": "Deadline"
             }
           ),
-          j.deadline && /* @__PURE__ */ e.jsx("button", { className: "td-icon-btn sm", title: "Clear deadline", onClick: () => void W({ deadline: "" }), children: /* @__PURE__ */ e.jsx(de, { size: 12 }) })
+          j.deadline && /* @__PURE__ */ e.jsx("button", { className: "td-icon-btn sm", title: "Clear deadline", onClick: () => void H({ deadline: "" }), children: /* @__PURE__ */ e.jsx(ue, { size: 12 }) })
         ] }),
         /* @__PURE__ */ e.jsxs("span", { className: "td-prop-label", children: [
-          /* @__PURE__ */ e.jsx(ht, { size: 13 }),
+          /* @__PURE__ */ e.jsx(ft, { size: 13 }),
           "Duration"
         ] }),
         /* @__PURE__ */ e.jsxs(
           "select",
           {
             className: "td-select",
-            value: j.duration ? hs(j.duration) : "",
+            value: j.duration ? xs(j.duration) : "",
             onChange: (n) => {
-              n.target.value && W({ duration: n.target.value });
+              n.target.value && H({ duration: n.target.value });
             },
             "aria-label": "Duration",
             children: [
-              /* @__PURE__ */ e.jsx("option", { value: "", disabled: !0, children: j.duration ? kt(j.duration) : "None" }),
-              gt.map((n) => /* @__PURE__ */ e.jsx("option", { value: n, children: n.replace("h30m", "h 30m") }, n))
+              /* @__PURE__ */ e.jsx("option", { value: "", disabled: !0, children: j.duration ? vt(j.duration) : "None" }),
+              Nt.map((n) => /* @__PURE__ */ e.jsx("option", { value: n, children: n.replace("h30m", "h 30m") }, n))
             ]
           }
         ),
         /* @__PURE__ */ e.jsxs("span", { className: "td-prop-label", children: [
-          /* @__PURE__ */ e.jsx(lt, { size: 13, color: "currentColor" }),
+          /* @__PURE__ */ e.jsx(rt, { size: 13, color: "currentColor" }),
           "Priority"
         ] }),
-        /* @__PURE__ */ e.jsxs("button", { ref: Y.priority, className: "td-prop-value", onClick: () => ee("priority"), children: [
-          /* @__PURE__ */ e.jsx(lt, { size: 13, color: j.priority === 1 ? "var(--td-muted)" : Ee[j.priority] }),
+        /* @__PURE__ */ e.jsxs("button", { ref: B.priority, className: "td-prop-value", onClick: () => te("priority"), children: [
+          /* @__PURE__ */ e.jsx(rt, { size: 13, color: j.priority === 1 ? "var(--td-muted)" : Ee[j.priority] }),
           "Priority ",
           5 - j.priority
         ] }),
@@ -582,18 +582,18 @@ function ps({ taskId: s, meta: t, now: a, revision: o, onClose: u, onToggle: c, 
         ] }),
         /* @__PURE__ */ e.jsxs("div", { className: "td-prop-labels", children: [
           j.labels.map((n) => {
-            const E = t.labels.find((T) => T.name === n);
-            return /* @__PURE__ */ e.jsxs("span", { className: "td-label-pill", style: { "--label": V(E?.color) }, children: [
+            const T = t.labels.find((R) => R.name === n);
+            return /* @__PURE__ */ e.jsxs("span", { className: "td-label-pill", style: { "--label": Q(T?.color) }, children: [
               n,
-              /* @__PURE__ */ e.jsx("button", { title: `Remove ${n}`, onClick: () => void W({ labels: j.labels.filter((T) => T !== n) }), children: /* @__PURE__ */ e.jsx(de, { size: 10 }) })
+              /* @__PURE__ */ e.jsx("button", { title: `Remove ${n}`, onClick: () => void H({ labels: j.labels.filter((R) => R !== n) }), children: /* @__PURE__ */ e.jsx(ue, { size: 10 }) })
             ] }, n);
           }),
-          /* @__PURE__ */ e.jsx("button", { ref: Y.labels, className: "td-icon-btn sm", title: "Add label", onClick: () => ee("labels"), children: /* @__PURE__ */ e.jsx(Ne, { size: 12 }) })
+          /* @__PURE__ */ e.jsx("button", { ref: B.labels, className: "td-icon-btn sm", title: "Add label", onClick: () => te("labels"), children: /* @__PURE__ */ e.jsx(Ne, { size: 12 }) })
         ] })
       ] }),
       /* @__PURE__ */ e.jsxs("section", { className: "td-section-block", children: [
         /* @__PURE__ */ e.jsxs("h3", { children: [
-          /* @__PURE__ */ e.jsx(Be, { size: 13 }),
+          /* @__PURE__ */ e.jsx(He, { size: 13 }),
           " Sub-tasks ",
           /* @__PURE__ */ e.jsx("span", { className: "td-count", children: ne.length || "" })
         ] }),
@@ -606,13 +606,13 @@ function ps({ taskId: s, meta: t, now: a, revision: o, onClose: u, onToggle: c, 
               style: { "--prio": Ee[n.priority] },
               "aria-label": "Complete sub-task",
               onClick: async () => {
-                await c(n) && B();
+                await c(n) && W();
               },
               children: /* @__PURE__ */ e.jsx("svg", { viewBox: "0 0 16 16", "aria-hidden": "true", children: /* @__PURE__ */ e.jsx("path", { d: "m4.6 8.3 2.3 2.3 4.6-4.9" }) })
             }
           ),
-          /* @__PURE__ */ e.jsx("button", { className: "td-subtask-title", onClick: () => r(n.id), children: je(n.content, p, n.id) }),
-          n.due && /* @__PURE__ */ e.jsx("span", { className: `td-chip td-due tone-${Re(n.due, a)}`, children: Ve(n.due, a) })
+          /* @__PURE__ */ e.jsx("button", { className: "td-subtask-title", onClick: () => r(n.id), children: xe(n.content, h, n.id) }),
+          n.due && /* @__PURE__ */ e.jsx("span", { className: `td-chip td-due tone-${Re(n.due, a)}`, children: Ge(n.due, a) })
         ] }, n.id)),
         /* @__PURE__ */ e.jsxs(
           "form",
@@ -620,22 +620,22 @@ function ps({ taskId: s, meta: t, now: a, revision: o, onClose: u, onToggle: c, 
             className: "td-inline-add",
             onSubmit: async (n) => {
               n.preventDefault();
-              const E = te.trim();
-              if (!(!E || K)) {
-                ye(!0);
+              const T = se.trim();
+              if (!(!T || U)) {
+                be(!0);
                 try {
-                  const T = await D.call("add", { content: E, parentId: j.id, projectId: j.projectId });
-                  C((M) => M && { ...M, children: [...M.children, T] }), U("");
-                } catch (T) {
-                  x(X(T));
+                  const R = await N.call("add", { content: T, parentId: j.id, projectId: j.projectId });
+                  D((L) => L && { ...L, children: [...L.children, R] }), _("");
+                } catch (R) {
+                  x(Z(R));
                 } finally {
-                  ye(!1);
+                  be(!1);
                 }
               }
             },
             children: [
               /* @__PURE__ */ e.jsx(Ne, { size: 13 }),
-              /* @__PURE__ */ e.jsx("input", { value: te, onChange: (n) => U(n.target.value), placeholder: "Add sub-task", onKeyDown: (n) => {
+              /* @__PURE__ */ e.jsx("input", { value: se, onChange: (n) => _(n.target.value), placeholder: "Add sub-task", onKeyDown: (n) => {
                 n.key === "Escape" && (n.preventDefault(), n.stopPropagation(), n.target.blur());
               } })
             ]
@@ -644,14 +644,14 @@ function ps({ taskId: s, meta: t, now: a, revision: o, onClose: u, onToggle: c, 
       ] }),
       /* @__PURE__ */ e.jsxs("section", { className: "td-section-block", children: [
         /* @__PURE__ */ e.jsxs("h3", { children: [
-          /* @__PURE__ */ e.jsx(ft, { size: 13 }),
+          /* @__PURE__ */ e.jsx(xt, { size: 13 }),
           " Comments ",
           /* @__PURE__ */ e.jsx("span", { className: "td-count", children: ae.length || "" })
         ] }),
         ae.map((n) => /* @__PURE__ */ e.jsxs("div", { className: "td-comment", children: [
           /* @__PURE__ */ e.jsx("div", { className: "td-comment-meta", children: new Date(n.postedAt).toLocaleString(void 0, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) }),
-          n.content && /* @__PURE__ */ e.jsx(ot, { text: n.content, open: p }),
-          n.attachment && /* @__PURE__ */ e.jsxs("button", { className: "td-attachment", onClick: () => n.attachment?.url && p(n.attachment.url), children: [
+          n.content && /* @__PURE__ */ e.jsx(ct, { text: n.content, open: h }),
+          n.attachment && /* @__PURE__ */ e.jsxs("button", { className: "td-attachment", onClick: () => n.attachment?.url && h(n.attachment.url), children: [
             "📎 ",
             n.attachment.name
           ] })
@@ -662,16 +662,16 @@ function ps({ taskId: s, meta: t, now: a, revision: o, onClose: u, onToggle: c, 
             className: "td-comment-form",
             onSubmit: async (n) => {
               n.preventDefault();
-              const E = re.trim();
-              if (!(!E || K)) {
-                ye(!0);
+              const T = oe.trim();
+              if (!(!T || U)) {
+                be(!0);
                 try {
-                  const T = await D.call("comment", { taskId: j.id, content: E });
-                  C((M) => M && { ...M, comments: [...M.comments, T] }), ue("");
-                } catch (T) {
-                  x(X(T));
+                  const R = await N.call("comment", { taskId: j.id, content: T });
+                  D((L) => L && { ...L, comments: [...L.comments, R] }), J("");
+                } catch (R) {
+                  x(Z(R));
                 } finally {
-                  ye(!1);
+                  be(!1);
                 }
               }
             },
@@ -679,82 +679,82 @@ function ps({ taskId: s, meta: t, now: a, revision: o, onClose: u, onToggle: c, 
               /* @__PURE__ */ e.jsx(
                 "textarea",
                 {
-                  value: re,
-                  onChange: (n) => ue(n.target.value),
+                  value: oe,
+                  onChange: (n) => J(n.target.value),
                   placeholder: "Write a comment",
-                  rows: re.includes(`
+                  rows: oe.includes(`
 `) ? 4 : 2,
                   onKeyDown: (n) => {
                     n.key === "Enter" && (n.metaKey || n.ctrlKey) && (n.preventDefault(), n.currentTarget.form.requestSubmit()), n.key === "Escape" && (n.preventDefault(), n.stopPropagation(), n.target.blur());
                   }
                 }
               ),
-              /* @__PURE__ */ e.jsx("button", { className: "td-btn td-btn-primary", disabled: !re.trim() || K, children: "Comment" })
+              /* @__PURE__ */ e.jsx("button", { className: "td-btn td-btn-primary", disabled: !oe.trim() || U, children: "Comment" })
             ]
           }
         )
       ] })
     ] }),
-    Z === "due" && /* @__PURE__ */ e.jsx(xt, { anchor: Y.due.current, current: j.due?.string, onPick: (n) => void W({ due: n }), onClose: () => ee(null) }),
-    Z === "priority" && /* @__PURE__ */ e.jsx(jt, { anchor: Y.priority.current, current: j.priority, onPick: (n) => void W({ priority: n }), onClose: () => ee(null) }),
-    Z === "labels" && /* @__PURE__ */ e.jsx(
-      _t,
+    ee === "due" && /* @__PURE__ */ e.jsx(jt, { anchor: B.due.current, current: j.due?.string, onPick: (n) => void H({ due: n }), onClose: () => te(null) }),
+    ee === "priority" && /* @__PURE__ */ e.jsx(bt, { anchor: B.priority.current, current: j.priority, onPick: (n) => void H({ priority: n }), onClose: () => te(null) }),
+    ee === "labels" && /* @__PURE__ */ e.jsx(
+      Yt,
       {
-        anchor: Y.labels.current,
+        anchor: B.labels.current,
         labels: t.labels,
         selected: j.labels,
-        onChange: (n) => void W({ labels: n }),
+        onChange: (n) => void H({ labels: n }),
         onCreate: f,
-        onClose: () => ee(null)
+        onClose: () => te(null)
       }
     ),
-    Z === "project" && /* @__PURE__ */ e.jsx(Ut, { anchor: Y.project.current, meta: t, current: { projectId: j.projectId, sectionId: j.sectionId }, onPick: (n) => void we(n.projectId, n.sectionId), onClose: () => ee(null) })
+    ee === "project" && /* @__PURE__ */ e.jsx(Bt, { anchor: B.project.current, meta: t, current: { projectId: j.projectId, sectionId: j.sectionId }, onPick: (n) => void we(n.projectId, n.sectionId), onClose: () => te(null) })
   ] });
 }
-function ct(s, t, a) {
+function dt(s, t, a) {
   if (s === "title") {
     const o = t.trim();
     return o && o !== a.content ? { content: o } : null;
   }
   return t !== a.description ? { description: t } : null;
 }
-function hs(s) {
+function xs(s) {
   if (s.unit === "day") return "";
   const t = Math.floor(s.amount / 60), a = s.amount % 60, o = `${t ? `${t}h` : ""}${a ? `${a}m` : ""}`;
-  return gt.includes(o) ? o : "";
+  return Nt.includes(o) ? o : "";
 }
-function fs(s) {
+function js(s) {
   const t = {};
   return s.content !== void 0 && (t.content = s.content), s.description !== void 0 && (t.description = s.description), s.priority !== void 0 && (t.priority = s.priority), s.labels !== void 0 && (t.labels = s.labels), s.deadline !== void 0 && (t.deadline = s.deadline || null), s.due === "" && (t.due = null), t;
 }
-const xs = d.memo(function({
+const bs = d.memo(function({
   task: t,
   lookup: a,
   now: o,
-  showProject: u,
+  showProject: m,
   focused: c,
   completing: r,
   depth: x = 0,
-  childCount: p = 0,
+  childCount: h = 0,
   onToggle: f,
-  onOpen: v,
-  onPatch: D,
+  onOpen: y,
+  onPatch: N,
   onFocus: g,
-  onOpenUrl: C,
+  onOpenUrl: D,
   onDelete: k
 }) {
-  const [$, A] = d.useState(null), O = d.useRef(null), S = d.useRef(null), w = !!t.completedAt || r, y = Re(t.due, o), l = a.project(t.projectId), F = a.section(t.sectionId);
+  const [A, P] = d.useState(null), z = d.useRef(null), $ = d.useRef(null), S = !!t.completedAt || r, v = Re(t.due, o), l = a.project(t.projectId), q = a.section(t.sectionId);
   return /* @__PURE__ */ e.jsxs(
     "div",
     {
-      className: `td-task${c ? " is-focused" : ""}${w ? " is-done" : ""}${r ? " is-completing" : ""}`,
+      className: `td-task${c ? " is-focused" : ""}${S ? " is-done" : ""}${r ? " is-completing" : ""}`,
       style: x ? { paddingLeft: 12 + x * 26 } : void 0,
       "data-task-id": t.id,
       role: "listitem",
       "aria-label": t.content,
       onMouseDown: () => g(t),
-      onClick: (I) => {
-        I.target.closest("button, a, input") || v(t);
+      onClick: (E) => {
+        E.target.closest("button, a, input") || y(t);
       },
       children: [
         /* @__PURE__ */ e.jsx(
@@ -763,457 +763,488 @@ const xs = d.memo(function({
             type: "button",
             className: `td-checkbox p${t.priority}`,
             style: { "--prio": Ee[t.priority] },
-            "aria-label": w ? "Reopen task" : "Complete task",
-            title: w ? "Reopen" : "Complete",
+            "aria-label": S ? "Reopen task" : "Complete task",
+            title: S ? "Reopen" : "Complete",
             onClick: () => f(t),
             children: /* @__PURE__ */ e.jsx("svg", { viewBox: "0 0 16 16", "aria-hidden": "true", children: /* @__PURE__ */ e.jsx("path", { d: "m4.6 8.3 2.3 2.3 4.6-4.9" }) })
           }
         ),
         /* @__PURE__ */ e.jsxs("div", { className: "td-task-main", children: [
-          /* @__PURE__ */ e.jsx("div", { className: "td-task-title", children: je(t.content, C, t.id) }),
-          t.description && !w && /* @__PURE__ */ e.jsx("div", { className: "td-task-desc", children: t.description.split(`
+          /* @__PURE__ */ e.jsx("div", { className: "td-task-title", children: xe(t.content, D, t.id) }),
+          t.description && !S && /* @__PURE__ */ e.jsx("div", { className: "td-task-desc", children: t.description.split(`
 `)[0] }),
           /* @__PURE__ */ e.jsxs("div", { className: "td-task-meta", children: [
-            t.due && /* @__PURE__ */ e.jsxs("span", { className: `td-chip td-due tone-${y}`, title: t.due.string, children: [
-              t.due.recurring ? /* @__PURE__ */ e.jsx(mt, { size: 12 }) : /* @__PURE__ */ e.jsx(We, { size: 12 }),
-              Ve(t.due, o)
+            t.due && /* @__PURE__ */ e.jsxs("span", { className: `td-chip td-due tone-${v}`, title: t.due.string, children: [
+              t.due.recurring ? /* @__PURE__ */ e.jsx(pt, { size: 12 }) : /* @__PURE__ */ e.jsx(Ve, { size: 12 }),
+              Ge(t.due, o)
             ] }),
             t.deadline && /* @__PURE__ */ e.jsxs("span", { className: "td-chip td-deadline", title: "Deadline", children: [
-              /* @__PURE__ */ e.jsx(pt, { size: 12 }),
-              ns(t.deadline, o)
+              /* @__PURE__ */ e.jsx(ht, { size: 12 }),
+              is(t.deadline, o)
             ] }),
             t.duration && /* @__PURE__ */ e.jsxs("span", { className: "td-chip", title: "Duration", children: [
-              /* @__PURE__ */ e.jsx(ht, { size: 12 }),
-              kt(t.duration)
+              /* @__PURE__ */ e.jsx(ft, { size: 12 }),
+              vt(t.duration)
             ] }),
-            p > 0 && /* @__PURE__ */ e.jsxs("span", { className: "td-chip", title: "Subtasks", children: [
-              /* @__PURE__ */ e.jsx(Be, { size: 12 }),
-              p
+            h > 0 && /* @__PURE__ */ e.jsxs("span", { className: "td-chip", title: "Subtasks", children: [
+              /* @__PURE__ */ e.jsx(He, { size: 12 }),
+              h
             ] }),
             t.commentCount > 0 && /* @__PURE__ */ e.jsxs("span", { className: "td-chip", title: "Comments", children: [
-              /* @__PURE__ */ e.jsx(ft, { size: 12 }),
+              /* @__PURE__ */ e.jsx(xt, { size: 12 }),
               t.commentCount
             ] }),
-            t.labels.map((I) => /* @__PURE__ */ e.jsxs("span", { className: "td-chip td-label", style: { color: V(a.label(I)?.color) }, children: [
+            t.labels.map((E) => /* @__PURE__ */ e.jsxs("span", { className: "td-chip td-label", style: { color: Q(a.label(E)?.color) }, children: [
               /* @__PURE__ */ e.jsx(Ae, { size: 12 }),
-              I
-            ] }, I)),
+              E
+            ] }, E)),
             t.completedAt && /* @__PURE__ */ e.jsxs("span", { className: "td-chip", children: [
               "Completed ",
               new Date(t.completedAt).toLocaleTimeString(void 0, { hour: "numeric", minute: "2-digit" })
             ] }),
-            u && l && /* @__PURE__ */ e.jsxs("span", { className: "td-chip td-project-chip", children: [
-              l.isInbox ? /* @__PURE__ */ e.jsx(Me, { size: 12 }) : /* @__PURE__ */ e.jsx("span", { className: "td-dot sm", style: { background: V(l.color) } }),
+            m && l && /* @__PURE__ */ e.jsxs("span", { className: "td-chip td-project-chip", children: [
+              l.isInbox ? /* @__PURE__ */ e.jsx(Me, { size: 12 }) : /* @__PURE__ */ e.jsx("span", { className: "td-dot sm", style: { background: Q(l.color) } }),
               l.name,
-              F ? /* @__PURE__ */ e.jsxs("span", { className: "td-dim", children: [
+              q ? /* @__PURE__ */ e.jsxs("span", { className: "td-dim", children: [
                 " / ",
-                F.name
+                q.name
               ] }) : null
             ] })
           ] })
         ] }),
-        !w && /* @__PURE__ */ e.jsxs("div", { className: "td-task-actions", children: [
-          /* @__PURE__ */ e.jsx("button", { ref: O, type: "button", className: "td-icon-btn", title: "Schedule (t = today)", onClick: () => A("due"), children: /* @__PURE__ */ e.jsx(We, {}) }),
-          /* @__PURE__ */ e.jsx("button", { ref: S, type: "button", className: "td-icon-btn", title: "Priority (1–4)", onClick: () => A("priority"), children: /* @__PURE__ */ e.jsx(Yt, {}) }),
-          k && /* @__PURE__ */ e.jsx("button", { type: "button", className: "td-icon-btn danger", title: "Delete (⌫)", onClick: () => k(t), children: /* @__PURE__ */ e.jsx(Ge, {}) })
+        !S && /* @__PURE__ */ e.jsxs("div", { className: "td-task-actions", children: [
+          /* @__PURE__ */ e.jsx("button", { ref: z, type: "button", className: "td-icon-btn", title: "Schedule (t = today)", onClick: () => P("due"), children: /* @__PURE__ */ e.jsx(Ve, {}) }),
+          /* @__PURE__ */ e.jsx("button", { ref: $, type: "button", className: "td-icon-btn", title: "Priority (1–4)", onClick: () => P("priority"), children: /* @__PURE__ */ e.jsx(Wt, {}) }),
+          k && /* @__PURE__ */ e.jsx("button", { type: "button", className: "td-icon-btn danger", title: "Delete (⌫)", onClick: () => k(t), children: /* @__PURE__ */ e.jsx(Xe, {}) })
         ] }),
-        $ === "due" && /* @__PURE__ */ e.jsx(xt, { anchor: O.current, current: t.due?.string, onPick: (I) => D(t, { due: I }), onClose: () => A(null) }),
-        $ === "priority" && /* @__PURE__ */ e.jsx(jt, { anchor: S.current, current: t.priority, onPick: (I) => D(t, { priority: I }), onClose: () => A(null) })
+        A === "due" && /* @__PURE__ */ e.jsx(jt, { anchor: z.current, current: t.due?.string, onPick: (E) => N(t, { due: E }), onClose: () => P(null) }),
+        A === "priority" && /* @__PURE__ */ e.jsx(bt, { anchor: $.current, current: t.priority, onPick: (E) => N(t, { priority: E }), onClose: () => P(null) })
       ]
     }
   );
-}), js = 650;
-function Ss({ variant: s = "pane" } = {}) {
-  const t = Qe(), a = Bt(t), o = Wt(), u = a?.setup?.state === "ready";
+}), ys = 650;
+function Ts({ variant: s = "pane" } = {}) {
+  const t = Je(), a = Ht(t), o = Vt(), m = a?.setup?.state === "ready";
   return d.useEffect(() => {
     t.call("status", {}).catch(() => {
     });
-  }, [t]), u ? /* @__PURE__ */ e.jsx(bs, { variant: s, revision: a.revision, defaultView: a.settings.defaultView, now: o, user: a.setup.user }) : /* @__PURE__ */ e.jsx("div", { className: Nt(s), children: /* @__PURE__ */ e.jsx(Ht, { setup: a?.setup ?? null, onRetry: async () => {
+  }, [t]), m ? /* @__PURE__ */ e.jsx(ks, { variant: s, revision: a.revision, defaultView: a.settings.defaultView, now: o, user: a.setup.user }) : /* @__PURE__ */ e.jsx("div", { className: Ct(s), children: /* @__PURE__ */ e.jsx(Qt, { setup: a?.setup ?? null, onRetry: async () => {
     await t.call("status", { refresh: !0 });
   } }) });
 }
-const Nt = (s, t = "") => `td-root${s === "modal" ? " td-window-root" : ""}${t}`;
-function bs({ variant: s, revision: t, defaultView: a, now: o, user: u }) {
-  const c = Qe(), [r, x] = d.useState({ kind: a }), [p, f] = Vt(c, "todoist.ui.sidebar", !0), [v, D] = d.useState(null), [g, C] = d.useState({}), [k, $] = d.useState([]), [A, O] = d.useState(null), [S, w] = d.useState(!1), [y, l] = d.useState(!0), [F, I] = d.useState(!1), [Q, Z] = d.useState(null), [ee, Fe] = d.useState({ today: null, inbox: null }), [be, re] = d.useState(/* @__PURE__ */ new Set()), [ue, te] = d.useState(null), [U, K] = d.useState(null), [ye, Y] = d.useState([]), [B, ke] = d.useState(!1), [W, we] = d.useState(""), [ve, j] = d.useState(() => window.innerWidth), [ne, ae] = d.useState(!1), [me, pe] = d.useState(!1), [G, he] = d.useState(null), [se, n] = d.useState(null), E = d.useRef(null), T = d.useRef(null), M = d.useRef(null), ge = d.useRef(0), Le = d.useRef(1), Oe = d.useRef(/* @__PURE__ */ new Set()), oe = ve < 640, Ct = ve < 820, qe = oe ? ne : p;
+const Ct = (s, t = "") => `td-root${s === "modal" ? " td-window-root" : ""}${t}`;
+function ks({ variant: s, revision: t, defaultView: a, now: o, user: m }) {
+  const c = Je(), [r, x] = d.useState({ kind: a }), [h, f] = Gt(c, "todoist.ui.sidebar", !0), [y, N] = d.useState(null), [g, D] = d.useState({}), [k, A] = d.useState([]), [P, z] = d.useState(null), [$, S] = d.useState(!1), [v, l] = d.useState(!0), [q, E] = d.useState(!1), [G, ee] = d.useState(null), [te, Fe] = d.useState({ today: null, inbox: null }), [je, oe] = d.useState(/* @__PURE__ */ new Set()), [J, se] = d.useState(null), [_, U] = d.useState(null), [be, B] = d.useState([]), [W, ye] = d.useState(!1), [H, we] = d.useState(""), [ke, j] = d.useState(() => window.innerWidth), [ne, ae] = d.useState(!1), [me, pe] = d.useState(!1), [ie, ve] = d.useState(null), he = d.useRef(r);
+  he.current = r;
+  const [n, T] = d.useState(null), R = d.useRef(null), L = d.useRef(null), Le = d.useRef(null), ge = d.useRef(0), Oe = d.useRef(1), qe = d.useRef(/* @__PURE__ */ new Set()), ce = ke < 640, wt = ke < 820, ze = ce ? ne : h;
   d.useEffect(() => {
     const i = () => j(window.innerWidth);
     return window.addEventListener("resize", i), () => window.removeEventListener("resize", i);
   }, []);
-  const H = d.useCallback((i, m = {}) => {
-    const h = Date.now() + Math.random();
-    Y((b) => [...b.slice(-2), { id: h, message: i, ...m }]), setTimeout(() => Y((b) => b.filter((L) => L.id !== h)), m.action ? 6e3 : m.tone === "error" ? 7e3 : 3e3);
-  }, []), P = d.useCallback((i) => {
-    const m = ts(i);
-    m === "NO_TOKEN" || m === "AUTH" || m === "TD_NOT_FOUND" || H(X(i), { tone: "error" });
-  }, [H]), ze = d.useCallback((i) => {
-    c.call("openUrl", { url: i }).catch(P);
-  }, [c, P]);
+  const V = d.useCallback((i, u = {}) => {
+    const p = Date.now() + Math.random();
+    B((b) => [...b.slice(-2), { id: p, message: i, ...u }]), setTimeout(() => B((b) => b.filter((I) => I.id !== p)), u.action ? 6e3 : u.tone === "error" ? 7e3 : 3e3);
+  }, []), M = d.useCallback((i) => {
+    const u = ns(i);
+    u === "NO_TOKEN" || u === "AUTH" || u === "TD_NOT_FOUND" || V(Z(i), { tone: "error" });
+  }, [V]), Ke = d.useCallback((i) => {
+    c.call("openUrl", { url: i }).catch(M);
+  }, [c, M]);
   d.useEffect(() => {
     let i = !0;
-    return c.call("meta", {}).then((m) => {
-      i && D(m);
-    }, P), () => {
+    return c.call("meta", {}).then((u) => {
+      i && N(u);
+    }, M), () => {
       i = !1;
     };
-  }, [c, t, P]);
-  const Ke = d.useCallback((i) => {
+  }, [c, t, M]);
+  const _e = d.useCallback((i) => {
     c.call("sections", { projectId: i }).then(
-      (m) => C((h) => ({ ...h, [i]: m })),
+      (u) => D((p) => ({ ...p, [i]: u })),
       () => {
       }
     );
-  }, [c]), J = d.useMemo(
-    () => v ? { ...v, sections: Object.values(g).flat() } : null,
-    [v, g]
-  ), _ = d.useCallback(async (i, m = "reset", h = null) => {
-    const b = ++ge.current, L = m === "append";
-    L ? I(!0) : l(!0);
+  }, [c]), X = d.useMemo(
+    () => y ? { ...y, sections: Object.values(g).flat() } : null,
+    [y, g]
+  ), Y = d.useCallback(async (i, u = "reset", p = null) => {
+    const b = ++ge.current, I = u === "append";
+    I ? E(!0) : l(!0);
     try {
-      let R = await c.call("list", { ...i, cursor: L ? h : null }), ie = R.tasks;
-      if (m === "refresh")
-        for (let N = 1; N < Le.current && R.nextCursor && b === ge.current; N++)
-          R = await c.call("list", { ...i, cursor: R.nextCursor }), ie = [...ie, ...R.tasks.filter((z) => !ie.some((xe) => xe.id === z.id))];
+      let C = await c.call("list", { ...i, cursor: I ? p : null }), K = C.tasks;
+      if (u === "refresh")
+        for (let w = 1; w < Oe.current && C.nextCursor && b === ge.current; w++)
+          C = await c.call("list", { ...i, cursor: C.nextCursor }), K = [...K, ...C.tasks.filter((F) => !K.some((le) => le.id === F.id))];
       if (b !== ge.current) return;
-      if (L ? Le.current += 1 : m === "reset" && (Le.current = 1), $((N) => L ? [...N, ...ie.filter((z) => !N.some((xe) => xe.id === z.id))] : ie), O(R.nextCursor), w(R.truncated), Z(null), !L && (i.kind === "today" || i.kind === "inbox")) {
-        const N = ie.filter((z) => !z.completedAt).length;
-        Fe((z) => ({ ...z, [i.kind]: R.nextCursor ? null : N }));
+      if (I ? Oe.current += 1 : u === "reset" && (Oe.current = 1), A((w) => I ? [...w, ...K.filter((F) => !w.some((le) => le.id === F.id))] : K), z(C.nextCursor), S(C.truncated), ee(null), !I && (i.kind === "today" || i.kind === "inbox")) {
+        const w = K.filter((F) => !F.completedAt).length;
+        Fe((F) => ({ ...F, [i.kind]: C.nextCursor ? null : w }));
       }
-    } catch (R) {
+    } catch (C) {
       if (b !== ge.current) return;
-      Z(X(R)), P(R);
+      ee(Z(C)), M(C);
     } finally {
-      b === ge.current && (l(!1), I(!1));
+      b === ge.current && (l(!1), E(!1));
     }
-  }, [c, P]), _e = JSON.stringify(r), et = d.useRef(null);
+  }, [c, M]), Ue = JSON.stringify(r), st = d.useRef(null);
   d.useEffect(() => {
-    const i = et.current === _e;
-    et.current = _e, _(r, i ? "refresh" : "reset");
-  }, [_e, t, _]);
-  const tt = d.useMemo(() => {
-    const i = new Map(J?.projects.map((b) => [b.id, b])), m = new Map(J?.sections.map((b) => [b.id, b])), h = new Map(J?.labels.map((b) => [b.name, b]));
+    const i = st.current === Ue;
+    st.current = Ue, Y(r, i ? "refresh" : "reset");
+  }, [Ue, t, Y]);
+  const nt = d.useMemo(() => {
+    const i = new Map(X?.projects.map((b) => [b.id, b])), u = new Map(X?.sections.map((b) => [b.id, b])), p = new Map(X?.labels.map((b) => [b.name, b]));
     return {
       project: (b) => i.get(b),
-      section: (b) => b ? m.get(b) : void 0,
-      label: (b) => h.get(b)
+      section: (b) => b ? u.get(b) : void 0,
+      label: (b) => p.get(b)
     };
-  }, [J]), Ue = J?.projects.find((i) => i.isInbox), fe = r.kind === "project" ? r.id : r.kind === "inbox" ? Ue?.id : void 0, ce = fe ? tt.project(fe) : void 0;
+  }, [X]), Ye = X?.projects.find((i) => i.isInbox), fe = r.kind === "project" ? r.id : r.kind === "inbox" ? Ye?.id : void 0, de = fe ? nt.project(fe) : void 0;
   d.useEffect(() => {
-    fe && Ke(fe);
-  }, [fe, t, Ke]);
-  const { groups: De, depths: wt, childCounts: st } = d.useMemo(() => ks(r, k, o, J, fe), [r, k, o, J, fe]), q = d.useMemo(() => De.flatMap((i) => i.tasks), [De]), Se = d.useCallback(async (i) => {
-    if (Oe.current.has(i.id)) return !1;
-    Oe.current.add(i.id);
-    const m = () => {
-      Oe.current.delete(i.id);
+    fe && _e(fe);
+  }, [fe, t, _e]);
+  const { groups: De, depths: Dt, childCounts: St } = d.useMemo(() => gs(r, k, o, X, fe), [r, k, o, X, fe]), O = d.useMemo(() => De.flatMap((i) => i.tasks), [De]), Se = d.useCallback(async (i) => {
+    if (qe.current.has(i.id)) return !1;
+    qe.current.add(i.id);
+    const u = () => {
+      qe.current.delete(i.id);
     };
     if (i.completedAt)
       try {
-        return await c.call("uncomplete", { id: i.id }), H("Task reopened"), !0;
-      } catch (h) {
-        return P(h), !1;
+        return await c.call("uncomplete", { id: i.id }), V("Task reopened"), !0;
+      } catch (p) {
+        return M(p), !1;
       } finally {
-        m();
+        u();
       }
-    re((h) => new Set(h).add(i.id));
+    oe((p) => new Set(p).add(i.id));
     try {
-      return await c.call("complete", { id: i.id }), H(i.due?.recurring ? `Completed — next: ${i.due.string}` : "Task completed", {
+      return await c.call("complete", { id: i.id }), V(i.due?.recurring ? `Completed — next: ${i.due.string}` : "Task completed", {
         action: i.due?.recurring ? void 0 : {
           label: "Undo",
           run: () => {
-            c.call("uncomplete", { id: i.id }).then(() => H("Task reopened"), P);
+            c.call("uncomplete", { id: i.id }).then(() => V("Task reopened"), M);
           }
         }
       }), setTimeout(() => {
-        re((h) => {
-          const b = new Set(h);
+        oe((p) => {
+          const b = new Set(p);
           return b.delete(i.id), b;
-        }), m();
-      }, js), !0;
-    } catch (h) {
-      return re((b) => {
-        const L = new Set(b);
-        return L.delete(i.id), L;
-      }), m(), P(h), !1;
+        }), u();
+      }, ys), !0;
+    } catch (p) {
+      return oe((b) => {
+        const I = new Set(b);
+        return I.delete(i.id), I;
+      }), u(), M(p), !1;
     }
-  }, [c, H, P]), Ie = d.useCallback(async (i, m) => {
-    m.priority !== void 0 && $((h) => h.map((b) => b.id === i.id ? { ...b, priority: m.priority } : b));
+  }, [c, V, M]), Ie = d.useCallback(async (i, u) => {
+    u.priority !== void 0 && A((p) => p.map((b) => b.id === i.id ? { ...b, priority: u.priority } : b));
     try {
-      await c.call("update", { id: i.id, ...m });
-    } catch (h) {
-      P(h), _(r, "refresh");
+      await c.call("update", { id: i.id, ...u });
+    } catch (p) {
+      M(p), Y(r, "refresh");
     }
-  }, [c, P, _, r]), Dt = d.useCallback(async (i) => {
-    let m;
+  }, [c, M, Y, r]), It = d.useCallback(async (i) => {
+    let u;
     try {
-      m = await c.call("quickAdd", { text: i });
-    } catch (h) {
-      return P(h), !1;
+      u = await c.call("quickAdd", { text: i });
+    } catch (p) {
+      return M(p), !1;
     }
     try {
-      await Qt(m, Gt(m, {
+      await Jt(u, Xt(u, {
         due: r.kind === "today" ? "today" : null,
         labels: r.kind === "label" && r.query ? [r.query] : [],
         projectId: r.kind === "project" ? r.id : null,
-        inboxId: Ue?.id ?? null
+        inboxId: Ye?.id ?? null
       }), {
-        update: (h) => c.call("update", h),
-        move: (h) => c.call("move", h)
-      }), H(`Added “${m.content}”`, { action: { label: "Open", run: () => K(m.id) } });
-    } catch (h) {
-      const b = h instanceof Jt ? `${h.message} ${X(h.cause)}` : X(h);
-      H(b, { tone: "error", action: { label: "Open", run: () => K(m.id) } });
+        update: (p) => c.call("update", p),
+        move: (p) => c.call("move", p)
+      }), V(`Added “${u.content}”`, { action: { label: "Open", run: () => U(u.id) } });
+    } catch (p) {
+      const b = p instanceof Zt ? `${p.message} ${Z(p.cause)}` : Z(p);
+      V(b, { tone: "error", action: { label: "Open", run: () => U(u.id) } });
     }
     return !0;
-  }, [c, r, H, P, Ue?.id]), St = d.useCallback(async (i) => {
-    he(null), $((b) => b.filter((L) => L.id !== i.id && L.parentId !== i.id)), U === i.id && K(null);
-    const m = q.findIndex((b) => b.id === i.id), h = q[m + 1] ?? q[m - 1];
-    te(h && h.id !== i.id ? h.id : null);
-    try {
-      await c.call("delete", { id: i.id }), H(`Deleted “${i.content}”`);
-    } catch (b) {
-      P(b), _(r, "refresh");
+  }, [c, r, V, M, Ye?.id]), Be = d.useCallback((i, u) => {
+    ve({ id: i, task: u ?? null, subtasks: null }), c.call("task", { id: i }).then(
+      (p) => ve((b) => b?.id === i ? { id: i, task: p.task, subtasks: p.children.length } : b),
+      () => {
+      }
+      // keep the cautious wording; deleting still works
+    );
+  }, [c]), Tt = d.useCallback(async (i) => {
+    ve(null);
+    const u = /* @__PURE__ */ new Set([i.id]);
+    for (let I = !0; I; ) {
+      I = !1;
+      for (const C of k) C.parentId && u.has(C.parentId) && !u.has(C.id) && (u.add(C.id), I = !0);
     }
-  }, [c, H, P, _, r, U, q]), nt = d.useCallback(async (i) => {
+    A((I) => I.filter((C) => !u.has(C.id))), _ && u.has(_) && U(null);
+    const p = O.findIndex((I) => I.id === i.id);
+    if (p >= 0 || J && u.has(J)) {
+      const I = p >= 0 ? p : O.findIndex((K) => K.id === J), C = O.slice(I + 1).find((K) => !u.has(K.id)) ?? O.slice(0, Math.max(0, I)).reverse().find((K) => !u.has(K.id));
+      se(C?.id ?? null);
+    }
+    const b = i.task?.content ?? "task";
+    try {
+      await c.call("delete", { id: i.id }), V(`Deleted “${b}”`);
+    } catch (I) {
+      M(I), Y(he.current, "refresh");
+    }
+  }, [c, V, M, Y, _, J, O, k]), at = d.useCallback(async (i) => {
     try {
       await c.call("createLabel", { name: i });
-    } catch (m) {
-      throw P(m), m;
+    } catch (u) {
+      throw M(u), u;
     }
-  }, [c, P]), at = d.useCallback((i) => {
-    ke(!1), ae(!1), te(null), vt(i, r) ? _(i, "reset") : ($([]), O(null), x(i)), M.current?.scrollTo({ top: 0 });
-  }, [r, x, _]);
+  }, [c, M]), it = d.useCallback((i) => {
+    ye(!1), ae(!1), se(null), gt(i, r) ? Y(i, "reset") : (A([]), z(null), x(i)), Le.current?.scrollTo({ top: 0 });
+  }, [r, x, Y]);
   d.useEffect(() => {
-    if (!B) return;
-    const i = W.trim();
+    if (!W) return;
+    const i = H.trim();
     if (!i) return;
-    const m = setTimeout(() => {
-      $([]), x({ kind: "search", query: i });
+    const u = setTimeout(() => {
+      A([]), x({ kind: "search", query: i });
     }, 350);
-    return () => clearTimeout(m);
-  }, [W, B]);
+    return () => clearTimeout(u);
+  }, [H, W]);
   const Te = d.useCallback(() => {
-    ke(!1), we(""), r.kind === "search" && ($([]), x({ kind: a }));
+    ye(!1), we(""), r.kind === "search" && (A([]), x({ kind: a }));
   }, [r.kind, a]);
-  d.useEffect(() => rs((m) => {
-    const h = m.target, b = h.closest('input, textarea, select, [contenteditable="true"]');
-    if (m.key === "Escape") {
-      if (m.defaultPrevented) return;
-      if (G) {
-        m.preventDefault(), he(null);
-        return;
-      }
+  d.useEffect(() => cs((u) => {
+    const p = u.target, b = p.closest('input, textarea, select, [contenteditable="true"]');
+    if (u.key === "Escape") {
+      if (u.defaultPrevented) return;
       if (me) {
-        m.preventDefault(), pe(!1);
+        u.preventDefault(), pe(!1);
         return;
       }
-      if (U) {
-        m.preventDefault(), K(null);
+      if (_) {
+        u.preventDefault(), U(null);
         return;
       }
-      if (B || r.kind === "search") {
-        m.preventDefault(), Te();
+      if (W || r.kind === "search") {
+        u.preventDefault(), Te();
         return;
       }
       if (ne) {
-        m.preventDefault(), ae(!1);
+        u.preventDefault(), ae(!1);
         return;
       }
       return;
     }
-    if (b || m.metaKey || m.ctrlKey || m.altKey || G) return;
-    const L = q.findIndex((z) => z.id === ue), R = L >= 0 ? q[L] : null, ie = (z) => {
-      if (!q.length) return;
-      const xe = q[Math.max(0, Math.min(q.length - 1, (L < 0 ? z > 0 ? -1 : q.length : L) + z))];
-      te(xe.id), M.current?.querySelector(`[data-task-id="${CSS.escape(xe.id)}"]`)?.scrollIntoView({ block: "nearest" }), U && K(xe.id);
-    }, N = m.key;
-    (N === "Enter" || N === " ") && os(h) || (N === "j" || N === "ArrowDown" ? (m.preventDefault(), ie(1)) : N === "k" || N === "ArrowUp" ? (m.preventDefault(), ie(-1)) : (N === "Enter" || N === "o") && R ? (m.preventDefault(), K(R.id)) : (N === "x" || N === " ") && R ? (m.preventDefault(), Se(R)) : /^[1-4]$/.test(N) && R ? (m.preventDefault(), Ie(R, { priority: 5 - Number(N) })) : N === "t" && R ? (m.preventDefault(), Ie(R, { due: "today" })) : (N === "Backspace" || N === "Delete") && R && !u?.readOnly ? (m.preventDefault(), he(R)) : N === "q" || N === "a" ? (m.preventDefault(), E.current?.focus()) : N === "/" ? (m.preventDefault(), ke(!0), requestAnimationFrame(() => T.current?.focus())) : N === "r" ? (m.preventDefault(), _(r, "refresh"), c.call("meta", {}).then(D, () => {
-    })) : N === "[" ? (m.preventDefault(), oe ? ae((z) => !z) : f(!p)) : N === "?" && (m.preventDefault(), pe((z) => !z)));
-  }), [q, ue, U, B, ne, me, Se, Ie, _, r, c, oe, p, f, Te, G, u?.readOnly]);
-  const It = ys(r, J), Tt = q.filter((i) => !i.completedAt && !be.has(i.id)).length, $t = r.kind === "today" ? "Due today unless you type a date" : r.kind === "project" && ce ? `Adds to #${ce.name}` : r.kind === "label" ? `Tagged @${r.query}` : r.kind === "inbox" ? "Adds to Inbox" : null, Et = !u?.readOnly && r.kind !== "completed";
-  return /* @__PURE__ */ e.jsxs("div", { className: Nt(s, oe ? " is-narrow" : ""), children: [
-    /* @__PURE__ */ e.jsxs("div", { className: `td-layout${qe && !oe ? " has-sidebar" : ""}`, children: [
-      qe && /* @__PURE__ */ e.jsxs(e.Fragment, { children: [
-        oe && /* @__PURE__ */ e.jsx("div", { className: "td-scrim", onClick: () => ae(!1) }),
+    if (b || u.metaKey || u.ctrlKey || u.altKey || ie) return;
+    const I = O.findIndex((F) => F.id === J), C = I >= 0 ? O[I] : null, K = (F) => {
+      if (!O.length) return;
+      const le = O[Math.max(0, Math.min(O.length - 1, (I < 0 ? F > 0 ? -1 : O.length : I) + F))];
+      se(le.id), Le.current?.querySelector(`[data-task-id="${CSS.escape(le.id)}"]`)?.scrollIntoView({ block: "nearest" }), _ && U(le.id);
+    }, w = u.key;
+    if (!((w === "Enter" || w === " ") && ds(p)))
+      if (w === "j" || w === "ArrowDown")
+        u.preventDefault(), K(1);
+      else if (w === "k" || w === "ArrowUp")
+        u.preventDefault(), K(-1);
+      else if ((w === "Enter" || w === "o") && C)
+        u.preventDefault(), U(C.id);
+      else if ((w === "x" || w === " ") && C)
+        u.preventDefault(), Se(C);
+      else if (/^[1-4]$/.test(w) && C)
+        u.preventDefault(), Ie(C, { priority: 5 - Number(w) });
+      else if (w === "t" && C)
+        u.preventDefault(), Ie(C, { due: "today" });
+      else if ((w === "Backspace" || w === "Delete") && !m?.readOnly && !p.closest('.td-popover, [role="dialog"]')) {
+        const F = _ ?? C?.id;
+        F && (u.preventDefault(), Be(F, O.find((le) => le.id === F)));
+      } else w === "q" || w === "a" ? (u.preventDefault(), R.current?.focus()) : w === "/" ? (u.preventDefault(), ye(!0), requestAnimationFrame(() => L.current?.focus())) : w === "r" ? (u.preventDefault(), Y(r, "refresh"), c.call("meta", {}).then(N, () => {
+      })) : w === "[" ? (u.preventDefault(), ce ? ae((F) => !F) : f(!h)) : w === "?" && (u.preventDefault(), pe((F) => !F));
+  }), [O, J, _, W, ne, me, Se, Ie, Y, r, c, ce, h, f, Te, ie, m?.readOnly, Be]);
+  const $t = vs(r, X), Et = O.filter((i) => !i.completedAt && !je.has(i.id)).length, At = r.kind === "today" ? "Due today unless you type a date" : r.kind === "project" && de ? `Adds to #${de.name}` : r.kind === "label" ? `Tagged @${r.query}` : r.kind === "inbox" ? "Adds to Inbox" : null, Rt = !m?.readOnly && r.kind !== "completed";
+  return /* @__PURE__ */ e.jsxs("div", { className: Ct(s, ce ? " is-narrow" : ""), children: [
+    /* @__PURE__ */ e.jsxs("div", { className: `td-layout${ze && !ce ? " has-sidebar" : ""}`, children: [
+      ze && /* @__PURE__ */ e.jsxs(e.Fragment, { children: [
+        ce && /* @__PURE__ */ e.jsx("div", { className: "td-scrim", onClick: () => ae(!1) }),
         /* @__PURE__ */ e.jsx(
-          ds,
+          ms,
           {
-            meta: J,
+            meta: X,
             current: r,
-            counts: ee,
-            user: u,
-            onSelect: at,
+            counts: te,
+            user: m,
+            onSelect: it,
             onSearch: () => {
-              ke(!0), ae(!1), requestAnimationFrame(() => T.current?.focus());
+              ye(!0), ae(!1), requestAnimationFrame(() => L.current?.focus());
             },
-            onCreateProject: async (i, m) => {
+            onCreateProject: async (i, u) => {
               try {
-                const h = await c.call("createProject", { name: i, color: m });
-                return at({ kind: "project", id: h.id }), !0;
-              } catch (h) {
-                return P(h), !1;
+                const p = await c.call("createProject", { name: i, color: u });
+                return it({ kind: "project", id: p.id }), !0;
+              } catch (p) {
+                return M(p), !1;
               }
             },
             onCreateLabel: async (i) => {
               try {
-                return await nt(i), !0;
+                return await at(i), !0;
               } catch {
                 return !1;
               }
             },
             onSignOut: () => {
-              c.call("logout", {}).catch(P);
+              c.call("logout", {}).catch(M);
             }
           }
         )
       ] }),
       /* @__PURE__ */ e.jsxs("main", { className: "td-main", children: [
         /* @__PURE__ */ e.jsxs("header", { className: "td-header", children: [
-          /* @__PURE__ */ e.jsx("button", { className: "td-icon-btn", title: qe ? "Hide sidebar ([)" : "Show sidebar ([)", onClick: () => oe ? ae((i) => !i) : f(!p), children: /* @__PURE__ */ e.jsx(Xt, {}) }),
-          B ? /* @__PURE__ */ e.jsxs("div", { className: "td-search", children: [
-            /* @__PURE__ */ e.jsx(dt, {}),
+          /* @__PURE__ */ e.jsx("button", { className: "td-icon-btn", title: ze ? "Hide sidebar ([)" : "Show sidebar ([)", onClick: () => ce ? ae((i) => !i) : f(!h), children: /* @__PURE__ */ e.jsx(es, {}) }),
+          W ? /* @__PURE__ */ e.jsxs("div", { className: "td-search", children: [
+            /* @__PURE__ */ e.jsx(ut, {}),
             /* @__PURE__ */ e.jsx(
               "input",
               {
-                ref: T,
-                value: W,
+                ref: L,
+                value: H,
                 onChange: (i) => we(i.target.value),
                 placeholder: "Search tasks",
                 onKeyDown: (i) => {
-                  i.key === "Escape" && (i.preventDefault(), Te()), i.key === "ArrowDown" && (i.preventDefault(), i.target.blur(), q[0] && te(q[0].id));
+                  i.key === "Escape" && (i.preventDefault(), Te()), i.key === "ArrowDown" && (i.preventDefault(), i.target.blur(), O[0] && se(O[0].id));
                 }
               }
             ),
-            /* @__PURE__ */ e.jsx("button", { className: "td-icon-btn sm", onClick: Te, title: "Close search", children: /* @__PURE__ */ e.jsx(de, { size: 12 }) })
+            /* @__PURE__ */ e.jsx("button", { className: "td-icon-btn sm", onClick: Te, title: "Close search", children: /* @__PURE__ */ e.jsx(ue, { size: 12 }) })
           ] }) : /* @__PURE__ */ e.jsxs("div", { className: "td-title", children: [
-            r.kind === "project" && ce && /* @__PURE__ */ e.jsx("span", { className: "td-dot lg", style: { background: V(ce.color) } }),
+            r.kind === "project" && de && /* @__PURE__ */ e.jsx("span", { className: "td-dot lg", style: { background: Q(de.color) } }),
             r.kind === "inbox" && /* @__PURE__ */ e.jsx(Me, {}),
-            /* @__PURE__ */ e.jsx("h1", { children: It }),
-            !y && r.kind !== "completed" && /* @__PURE__ */ e.jsxs("span", { className: "td-title-count", children: [
-              Tt,
-              A ? "+" : ""
+            /* @__PURE__ */ e.jsx("h1", { children: $t }),
+            !v && r.kind !== "completed" && /* @__PURE__ */ e.jsxs("span", { className: "td-title-count", children: [
+              Et,
+              P ? "+" : ""
             ] })
           ] }),
           /* @__PURE__ */ e.jsxs("div", { className: "td-header-tools", children: [
-            ce && /* @__PURE__ */ e.jsx("button", { className: "td-icon-btn", title: "Open project in Todoist", onClick: () => ze(ce.url), children: /* @__PURE__ */ e.jsx(ut, {}) }),
-            /* @__PURE__ */ e.jsx("button", { className: "td-icon-btn", title: "Keyboard shortcuts (?)", onClick: () => pe(!0), children: /* @__PURE__ */ e.jsx(Zt, {}) }),
-            /* @__PURE__ */ e.jsx("button", { className: `td-icon-btn${y ? " is-spinning" : ""}`, title: "Refresh (r)", onClick: () => {
-              _(r, "refresh"), c.call("meta", {}).then(D, () => {
+            de && /* @__PURE__ */ e.jsx("button", { className: "td-icon-btn", title: "Open project in Todoist", onClick: () => Ke(de.url), children: /* @__PURE__ */ e.jsx(mt, {}) }),
+            /* @__PURE__ */ e.jsx("button", { className: "td-icon-btn", title: "Keyboard shortcuts (?)", onClick: () => pe(!0), children: /* @__PURE__ */ e.jsx(ts, {}) }),
+            /* @__PURE__ */ e.jsx("button", { className: `td-icon-btn${v ? " is-spinning" : ""}`, title: "Refresh (r)", onClick: () => {
+              Y(r, "refresh"), c.call("meta", {}).then(N, () => {
               });
-            }, children: /* @__PURE__ */ e.jsx(es, {}) }),
-            s === "modal" && /* @__PURE__ */ e.jsx("button", { className: "td-icon-btn", title: "Close (Esc)", onClick: () => void c.context.api.ui.close(), children: /* @__PURE__ */ e.jsx(de, {}) })
+            }, children: /* @__PURE__ */ e.jsx(ss, {}) }),
+            s === "modal" && /* @__PURE__ */ e.jsx("button", { className: "td-icon-btn", title: "Close (Esc)", onClick: () => void c.context.api.ui.close(), children: /* @__PURE__ */ e.jsx(ue, {}) })
           ] })
         ] }),
-        Et && /* @__PURE__ */ e.jsx("div", { className: "td-add-row", children: /* @__PURE__ */ e.jsx(
-          cs,
+        Rt && /* @__PURE__ */ e.jsx("div", { className: "td-add-row", children: /* @__PURE__ */ e.jsx(
+          us,
           {
-            ref: E,
-            placeholder: oe ? "Add a task" : 'Add a task — "Review PR tomorrow 3pm p1 #Work @review"',
-            contextLabel: $t,
-            onSubmit: Dt
+            ref: R,
+            placeholder: ce ? "Add a task" : 'Add a task — "Review PR tomorrow 3pm p1 #Work @review"',
+            contextLabel: At,
+            onSubmit: It
           }
         ) }),
-        /* @__PURE__ */ e.jsxs("div", { className: "td-list", ref: M, role: "list", children: [
-          y && !k.length ? /* @__PURE__ */ e.jsx(gs, {}) : Q && !k.length ? /* @__PURE__ */ e.jsxs("div", { className: "td-empty", children: [
+        /* @__PURE__ */ e.jsxs("div", { className: "td-list", ref: Le, role: "list", children: [
+          v && !k.length ? /* @__PURE__ */ e.jsx(Cs, {}) : G && !k.length ? /* @__PURE__ */ e.jsxs("div", { className: "td-empty", children: [
             /* @__PURE__ */ e.jsx("p", { children: "Couldn’t load this list." }),
-            /* @__PURE__ */ e.jsx("p", { className: "td-dim td-small", children: Q }),
-            /* @__PURE__ */ e.jsx("button", { className: "td-btn", onClick: () => void _(r, "reset"), children: "Try again" })
-          ] }) : q.length ? De.map((i) => /* @__PURE__ */ e.jsxs("section", { className: "td-group", children: [
+            /* @__PURE__ */ e.jsx("p", { className: "td-dim td-small", children: G }),
+            /* @__PURE__ */ e.jsx("button", { className: "td-btn", onClick: () => void Y(r, "reset"), children: "Try again" })
+          ] }) : O.length ? De.map((i) => /* @__PURE__ */ e.jsxs("section", { className: "td-group", children: [
             (De.length > 1 || i.subtitle || i.key !== "all") && i.title && /* @__PURE__ */ e.jsxs("h2", { className: `td-group-title${i.tone ? ` tone-${i.tone}` : ""}`, children: [
               i.title,
               i.subtitle && /* @__PURE__ */ e.jsx("span", { className: "td-group-sub", children: i.subtitle }),
               /* @__PURE__ */ e.jsx("span", { className: "td-group-count", children: i.tasks.length })
             ] }),
-            i.tasks.map((m) => /* @__PURE__ */ e.jsx(
-              xs,
+            i.tasks.map((u) => /* @__PURE__ */ e.jsx(
+              bs,
               {
-                task: m,
-                lookup: tt,
+                task: u,
+                lookup: nt,
                 now: o,
                 showProject: r.kind !== "project" && r.kind !== "inbox",
-                focused: ue === m.id || U === m.id,
-                completing: be.has(m.id),
-                depth: wt.get(m.id) ?? 0,
-                childCount: st.get(m.id) ?? 0,
+                focused: J === u.id || _ === u.id,
+                completing: je.has(u.id),
+                depth: Dt.get(u.id) ?? 0,
+                childCount: St.get(u.id) ?? 0,
                 onToggle: Se,
-                onOpen: (h) => {
-                  te(h.id), K(h.id);
+                onOpen: (p) => {
+                  se(p.id), U(p.id);
                 },
                 onPatch: Ie,
-                onFocus: (h) => te(h.id),
-                onOpenUrl: ze,
-                onDelete: u?.readOnly ? void 0 : (h) => {
-                  te(h.id), he(h);
+                onFocus: (p) => se(p.id),
+                onOpenUrl: Ke,
+                onDelete: m?.readOnly ? void 0 : (p) => {
+                  se(p.id), Be(p.id, p);
                 }
               },
-              m.id
+              u.id
             ))
-          ] }, i.key)) : /* @__PURE__ */ e.jsx(vs, { view: r }),
-          (A || S) && q.length > 0 && /* @__PURE__ */ e.jsx("div", { className: "td-more", children: A ? /* @__PURE__ */ e.jsxs("button", { className: "td-btn", disabled: F, onClick: () => void _(r, "append", A), children: [
-            F ? /* @__PURE__ */ e.jsx("span", { className: "td-spinner" }) : null,
+          ] }, i.key)) : /* @__PURE__ */ e.jsx(Ns, { view: r }),
+          (P || $) && O.length > 0 && /* @__PURE__ */ e.jsx("div", { className: "td-more", children: P ? /* @__PURE__ */ e.jsxs("button", { className: "td-btn", disabled: q, onClick: () => void Y(r, "append", P), children: [
+            q ? /* @__PURE__ */ e.jsx("span", { className: "td-spinner" }) : null,
             " Load more"
           ] }) : /* @__PURE__ */ e.jsxs("span", { className: "td-dim td-small", children: [
             "Showing the first ",
-            q.length,
+            O.length,
             " tasks — this filter has more than can be loaded here. Open it in Todoist for the rest."
           ] }) }),
-          r.kind === "project" && ce && !u?.readOnly && !y && (se !== null ? /* @__PURE__ */ e.jsxs(
+          r.kind === "project" && de && !m?.readOnly && !v && (n !== null ? /* @__PURE__ */ e.jsxs(
             "form",
             {
               className: "td-section-add",
               onSubmit: async (i) => {
-                if (i.preventDefault(), !!se.trim())
+                if (i.preventDefault(), !!n.trim())
                   try {
-                    await c.call("createSection", { projectId: ce.id, name: se.trim() }), n(null);
-                  } catch (m) {
-                    P(m);
+                    await c.call("createSection", { projectId: de.id, name: n.trim() }), T(null);
+                  } catch (u) {
+                    M(u);
                   }
               },
               children: [
-                /* @__PURE__ */ e.jsx("input", { autoFocus: !0, value: se, onChange: (i) => n(i.target.value), placeholder: "Section name", onKeyDown: (i) => {
-                  i.key === "Escape" && (i.preventDefault(), i.stopPropagation(), n(null));
+                /* @__PURE__ */ e.jsx("input", { autoFocus: !0, value: n, onChange: (i) => T(i.target.value), placeholder: "Section name", onKeyDown: (i) => {
+                  i.key === "Escape" && (i.preventDefault(), i.stopPropagation(), T(null));
                 } }),
-                /* @__PURE__ */ e.jsx("button", { className: "td-btn td-btn-primary", disabled: !se.trim(), children: "Add section" }),
-                /* @__PURE__ */ e.jsx("button", { type: "button", className: "td-btn td-btn-ghost", onClick: () => n(null), children: "Cancel" })
+                /* @__PURE__ */ e.jsx("button", { className: "td-btn td-btn-primary", disabled: !n.trim(), children: "Add section" }),
+                /* @__PURE__ */ e.jsx("button", { type: "button", className: "td-btn td-btn-ghost", onClick: () => T(null), children: "Cancel" })
               ]
             }
-          ) : /* @__PURE__ */ e.jsxs("button", { className: "td-add-section", onClick: () => n(""), children: [
+          ) : /* @__PURE__ */ e.jsxs("button", { className: "td-add-section", onClick: () => T(""), children: [
             /* @__PURE__ */ e.jsx(Ne, { size: 12 }),
             " Add section"
           ] }))
         ] })
       ] }),
-      U && J && /* @__PURE__ */ e.jsxs(e.Fragment, { children: [
-        Ct && /* @__PURE__ */ e.jsx("div", { className: "td-scrim", onClick: () => K(null) }),
+      _ && X && /* @__PURE__ */ e.jsxs(e.Fragment, { children: [
+        wt && /* @__PURE__ */ e.jsx("div", { className: "td-scrim", onClick: () => U(null) }),
         /* @__PURE__ */ e.jsx(
-          ps,
+          fs,
           {
-            taskId: U,
-            meta: J,
+            taskId: _,
+            meta: X,
             now: o,
-            onClose: () => K(null),
+            onClose: () => U(null),
             onToggle: Se,
-            onOpenTask: (i) => K(i),
+            onOpenTask: (i) => U(i),
             revision: t,
-            onError: (i) => H(i, { tone: "error" }),
-            onOpenUrl: ze,
-            onCreateLabel: nt,
-            onNeedSections: Ke
+            onError: (i) => V(i, { tone: "error" }),
+            onOpenUrl: Ke,
+            onCreateLabel: at,
+            onNeedSections: _e
           },
-          U
+          _
         )
       ] })
     ] }),
-    /* @__PURE__ */ e.jsx("div", { className: "td-toasts", "aria-live": "polite", children: ye.map((i) => /* @__PURE__ */ e.jsxs("div", { className: `td-toast${i.tone === "error" ? " is-error" : ""}`, children: [
+    /* @__PURE__ */ e.jsx("div", { className: "td-toasts", "aria-live": "polite", children: be.map((i) => /* @__PURE__ */ e.jsxs("div", { className: `td-toast${i.tone === "error" ? " is-error" : ""}`, children: [
       /* @__PURE__ */ e.jsx("span", { children: i.message }),
       i.action && /* @__PURE__ */ e.jsx("button", { onClick: () => {
-        i.action.run(), Y((m) => m.filter((h) => h.id !== i.id));
+        i.action.run(), B((u) => u.filter((p) => p.id !== i.id));
       }, children: i.action.label })
     ] }, i.id)) }),
-    me && /* @__PURE__ */ e.jsx(Cs, { onClose: () => pe(!1) }),
-    G && /* @__PURE__ */ e.jsx(Ns, { task: G, subtasks: st.get(G.id) ?? 0, onCancel: () => he(null), onConfirm: () => void St(G) })
+    me && /* @__PURE__ */ e.jsx(Ds, { onClose: () => pe(!1) }),
+    ie && /* @__PURE__ */ e.jsx(ws, { target: ie, onCancel: () => ve(null), onConfirm: () => void Tt(ie) })
   ] });
 }
-function ys(s, t) {
+function vs(s, t) {
   switch (s.kind) {
     case "today":
       return "Today";
@@ -1233,32 +1264,32 @@ function ys(s, t) {
       return t?.projects.find((a) => a.id === s.id)?.name ?? "Project";
   }
 }
-function ks(s, t, a, o, u) {
+function gs(s, t, a, o, m) {
   const c = /* @__PURE__ */ new Map(), r = /* @__PURE__ */ new Map(), x = new Set(t.map((f) => f.id));
   for (const f of t) f.parentId && x.has(f.parentId) && r.set(f.parentId, (r.get(f.parentId) ?? 0) + 1);
-  if (s.kind === "today") return { groups: as(t, a), depths: c, childCounts: r };
-  if (s.kind === "upcoming") return { groups: is(t, a), depths: c, childCounts: r };
-  if (s.kind === "completed") return { groups: ls(t, a), depths: c, childCounts: r };
-  if ((s.kind === "project" || s.kind === "inbox") && u) {
-    const f = (o?.sections ?? []).filter((k) => k.projectId === u), v = /* @__PURE__ */ new Map();
+  if (s.kind === "today") return { groups: ls(t, a), depths: c, childCounts: r };
+  if (s.kind === "upcoming") return { groups: rs(t, a), depths: c, childCounts: r };
+  if (s.kind === "completed") return { groups: os(t, a), depths: c, childCounts: r };
+  if ((s.kind === "project" || s.kind === "inbox") && m) {
+    const f = (o?.sections ?? []).filter((k) => k.projectId === m), y = /* @__PURE__ */ new Map();
     for (const k of t) {
-      const $ = k.sectionId && f.some((O) => O.id === k.sectionId) ? k.sectionId : null, A = v.get($) ?? [];
-      A.push(k), v.set($, A);
+      const A = k.sectionId && f.some((z) => z.id === k.sectionId) ? k.sectionId : null, P = y.get(A) ?? [];
+      P.push(k), y.set(A, P);
     }
-    const D = (k) => {
-      const $ = new Set(k.map((w) => w.id)), A = k.filter((w) => !w.parentId || !$.has(w.parentId)).sort((w, y) => w.order - y.order), O = [], S = (w, y) => {
-        O.push(w), c.set(w.id, y), k.filter((l) => l.parentId === w.id).sort((l, F) => l.order - F.order).forEach((l) => S(l, Math.min(y + 1, 4)));
+    const N = (k) => {
+      const A = new Set(k.map((S) => S.id)), P = k.filter((S) => !S.parentId || !A.has(S.parentId)).sort((S, v) => S.order - v.order), z = [], $ = (S, v) => {
+        z.push(S), c.set(S.id, v), k.filter((l) => l.parentId === S.id).sort((l, q) => l.order - q.order).forEach((l) => $(l, Math.min(v + 1, 4)));
       };
-      return A.forEach((w) => S(w, 0)), O;
-    }, g = [], C = v.get(null) ?? [];
-    (C.length || !f.length) && g.push({ key: "all", title: "", tasks: D(C) });
+      return P.forEach((S) => $(S, 0)), z;
+    }, g = [], D = y.get(null) ?? [];
+    (D.length || !f.length) && g.push({ key: "all", title: "", tasks: N(D) });
     for (const k of f)
-      g.push({ key: k.id, title: k.name, tasks: D(v.get(k.id) ?? []) });
+      g.push({ key: k.id, title: k.name, tasks: N(y.get(k.id) ?? []) });
     return { groups: g.filter((k) => k.tasks.length || k.key !== "all"), depths: c, childCounts: r };
   }
-  return { groups: [{ key: "all", title: "", tasks: [...t].sort((f, v) => v.priority - f.priority || (f.due?.date ?? "9999").localeCompare(v.due?.date ?? "9999") || f.order - v.order) }], depths: c, childCounts: r };
+  return { groups: [{ key: "all", title: "", tasks: [...t].sort((f, y) => y.priority - f.priority || (f.due?.date ?? "9999").localeCompare(y.due?.date ?? "9999") || f.order - y.order) }], depths: c, childCounts: r };
 }
-function vs({ view: s }) {
+function Ns({ view: s }) {
   const t = {
     today: ["You’re all done for today", "Enjoy the rest of your day — or add something below."],
     upcoming: ["Nothing scheduled in the next two weeks", "Tasks with a due date show up here."],
@@ -1278,7 +1309,7 @@ function vs({ view: s }) {
     /* @__PURE__ */ e.jsx("p", { className: "td-dim", children: o })
   ] });
 }
-function gs() {
+function Cs() {
   return /* @__PURE__ */ e.jsx("div", { className: "td-skeleton-list", "aria-busy": "true", children: [78, 52, 64, 40, 70].map((s, t) => /* @__PURE__ */ e.jsxs("div", { className: "td-task is-skeleton", children: [
     /* @__PURE__ */ e.jsx("span", { className: "td-checkbox" }),
     /* @__PURE__ */ e.jsxs("div", { className: "td-task-main", children: [
@@ -1287,26 +1318,44 @@ function gs() {
     ] })
   ] }, t)) });
 }
-function Ns({ task: s, subtasks: t, onCancel: a, onConfirm: o }) {
-  return /* @__PURE__ */ e.jsx("div", { className: "td-modal-scrim", onClick: a, children: /* @__PURE__ */ e.jsxs("div", { className: "td-help td-delete", onClick: (u) => u.stopPropagation(), role: "dialog", "aria-label": "Delete task", children: [
+function ws({ target: s, onCancel: t, onConfirm: a }) {
+  const o = d.useRef(null), m = d.useRef(t);
+  m.current = t;
+  const [c] = d.useState(() => document.activeElement);
+  d.useEffect(() => {
+    const f = (y) => {
+      if (y.key === "Escape")
+        y.preventDefault(), y.stopPropagation(), m.current();
+      else if (y.key === "Tab") {
+        const N = [...o.current?.querySelectorAll("button") ?? []];
+        if (!N.length) return;
+        y.preventDefault();
+        const g = N.indexOf(document.activeElement);
+        N[(g + (y.shiftKey ? -1 : 1) + N.length) % N.length].focus();
+      }
+    };
+    return document.addEventListener("keydown", f, !0), () => {
+      document.removeEventListener("keydown", f, !0), c?.isConnected && c.focus();
+    };
+  }, []);
+  const { task: r, subtasks: x } = s, h = x === null ? " and any sub-tasks" : x > 0 ? ` and its ${x} sub-task${x > 1 ? "s" : ""} (with anything nested under them)` : "";
+  return /* @__PURE__ */ e.jsx("div", { className: "td-modal-scrim", onClick: t, children: /* @__PURE__ */ e.jsxs("div", { ref: o, className: "td-help td-delete", onClick: (f) => f.stopPropagation(), role: "dialog", "aria-modal": "true", "aria-label": "Delete task", children: [
     /* @__PURE__ */ e.jsx("div", { className: "td-help-head", children: /* @__PURE__ */ e.jsx("h2", { children: "Delete task?" }) }),
     /* @__PURE__ */ e.jsxs("p", { children: [
-      "“",
-      s.content,
-      "”",
-      t ? ` and its ${t} sub-task${t > 1 ? "s" : ""}` : "",
+      r ? `“${r.content}”` : "This task",
+      h,
       " will be deleted. This cannot be undone."
     ] }),
     /* @__PURE__ */ e.jsxs("div", { className: "td-delete-actions", children: [
-      /* @__PURE__ */ e.jsx("button", { className: "td-btn", onClick: a, children: "Cancel" }),
-      /* @__PURE__ */ e.jsxs("button", { className: "td-btn td-btn-danger", autoFocus: !0, onClick: o, children: [
-        /* @__PURE__ */ e.jsx(Ge, { size: 13 }),
+      /* @__PURE__ */ e.jsx("button", { className: "td-btn", onClick: t, children: "Cancel" }),
+      /* @__PURE__ */ e.jsxs("button", { className: "td-btn td-btn-danger", autoFocus: !0, onClick: a, children: [
+        /* @__PURE__ */ e.jsx(Xe, { size: 13 }),
         " Delete"
       ] })
     ] })
   ] }) });
 }
-function Cs({ onClose: s }) {
+function Ds({ onClose: s }) {
   const t = [
     ["q / a", "Quick add"],
     ["/", "Search"],
@@ -1324,14 +1373,14 @@ function Cs({ onClose: s }) {
   return /* @__PURE__ */ e.jsx("div", { className: "td-modal-scrim", onClick: s, children: /* @__PURE__ */ e.jsxs("div", { className: "td-help", onClick: (a) => a.stopPropagation(), role: "dialog", "aria-label": "Keyboard shortcuts", children: [
     /* @__PURE__ */ e.jsxs("div", { className: "td-help-head", children: [
       /* @__PURE__ */ e.jsx("h2", { children: "Keyboard shortcuts" }),
-      /* @__PURE__ */ e.jsx("button", { className: "td-icon-btn", onClick: s, children: /* @__PURE__ */ e.jsx(de, {}) })
+      /* @__PURE__ */ e.jsx("button", { className: "td-icon-btn", onClick: s, children: /* @__PURE__ */ e.jsx(ue, {}) })
     ] }),
     /* @__PURE__ */ e.jsx("dl", { children: t.map(([a, o]) => /* @__PURE__ */ e.jsxs("div", { children: [
-      /* @__PURE__ */ e.jsx("dt", { children: a.split("  ").map((u) => /* @__PURE__ */ e.jsx("kbd", { children: u }, u)) }),
+      /* @__PURE__ */ e.jsx("dt", { children: a.split("  ").map((m) => /* @__PURE__ */ e.jsx("kbd", { children: m }, m)) }),
       /* @__PURE__ */ e.jsx("dd", { children: o })
     ] }, a)) })
   ] }) });
 }
 export {
-  Ss as A
+  Ts as A
 };
