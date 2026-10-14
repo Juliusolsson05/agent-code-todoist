@@ -35,11 +35,19 @@ function resolveDue(text) {
   if (text === undefined || text === null) return null
   const lower = String(text).toLowerCase().trim()
   if (!lower || lower === 'no date') return null
-  let date = dayFromToday(0)
+  let date
   if (/^\d{4}-\d{2}-\d{2}$/.test(lower)) date = lower
-  else if (lower.startsWith('tomorrow')) date = dayFromToday(1)
+  else if (/^(today|tod)\b/.test(lower) || /^every\b/.test(lower)) date = dayFromToday(0)
+  else if (/^(tomorrow|tom)\b/.test(lower)) date = dayFromToday(1)
   else if (lower.startsWith('yesterday')) date = dayFromToday(-1)
-  else if (lower.startsWith('next week') || lower.startsWith('next monday')) date = dayFromToday(7)
+  else if (/^next (week|mon|tue|wed|thu|fri|sat|sun)/.test(lower)) date = dayFromToday(7)
+  else if (/^in \d+ days?$/.test(lower)) date = dayFromToday(Number(lower.match(/\d+/)[0]))
+  else {
+    // Todoist rejects a due string it cannot parse. Resolving every unknown
+    // string to "today" (the first version) made a bad date look like a
+    // successful save in every suite.
+    throw Object.assign(new Error(`Date is invalid: ${text}`), { status: 400, body: { error: 'Date is invalid', error_code: 46, http_code: 400 } })
+  }
   return { date, is_recurring: /^every\b/.test(lower), lang: 'en', string: String(text), timezone: null }
 }
 
@@ -306,7 +314,7 @@ export class FakeTodoist {
       if (parts.length === 2 && method === 'DELETE') {
         task.is_deleted = true
         for (const child of this.tasks.filter(t => t.parent_id === task.id)) child.is_deleted = true
-        return { status: 204 }
+        return ok({})
       }
       if (parts[2] === 'close' && method === 'POST') {
         if (task.due?.is_recurring) {
@@ -316,12 +324,14 @@ export class FakeTodoist {
           task.checked = true
           task.completed_at = new Date().toISOString()
         }
-        return { status: 204 }
+        // The spec declares 200 + application/json `{}` (schema {}). The SDK
+        // accepts any 2xx and an empty body too; faults.test covers 204.
+        return ok({})
       }
       if (parts[2] === 'reopen' && method === 'POST') {
         task.checked = false
         task.completed_at = null
-        return { status: 204 }
+        return ok({})
       }
       if (parts[2] === 'move' && method === 'POST') {
         if (body.project_id) Object.assign(task, { project_id: body.project_id, section_id: null, parent_id: null })
@@ -376,22 +386,38 @@ export class FakeTodoist {
     return task
   }
 
-  /** Server-side quick-add parse, mirroring the syntax our hint layer marks. */
+  /**
+   * Server-side quick-add parse, following the OpenAPI spec's description of
+   * /api/v1/tasks/quick (the parts our UI relies on):
+   * - " // description text" must be at the end; everything after it is the
+   *   description and is NOT parsed (a date there stays text).
+   * - "If parsing fails for any element, the task is still created (with
+   *   unparsed text remaining in the content)": a #project that matches no
+   *   project stays in the title and the task lands in the Inbox.
+   * Dates: only today/tomorrow (all the suites type). An earlier version
+   * stripped any "#word" and parsed dates anywhere, which hid two real UI
+   * bugs (review of PR #2).
+   */
   quickAdd(text) {
-    let content = String(text ?? '')
+    const raw = String(text ?? '')
+    const marker = /(?:^|\s)\/\/(?=\s|$)/.exec(raw)
+    let content = marker ? raw.slice(0, marker.index) : raw
+    const description = marker ? raw.slice(marker.index + marker[0].length).trim() : ''
     const take = re => {
       const match = content.match(re)
       if (match) content = content.replace(match[0], ' ')
       return match
     }
     const priority = take(/(?:^|\s)p([1-4])(?=\s|$)/)
-    const project = take(/(?:^|\s)#(\S+)/)
+    const projectToken = content.match(/(?:^|\s)#(\S+)/)
+    const target = projectToken ? this.projects.find(p => p.name.toLowerCase() === projectToken[1].toLowerCase()) : null
+    if (target) content = content.replace(projectToken[0], ' ')
     const labels = []
     for (let label = take(/(?:^|\s)@(\S+)/); label; label = take(/(?:^|\s)@(\S+)/)) labels.push(label[1])
     const due = take(/(?:^|\s)(today|tomorrow)(?=\s|$)/i)
-    const target = project ? this.projects.find(p => p.name.toLowerCase() === project[1].toLowerCase()) : null
     return this.addTask({
       content: content.replace(/\s+/g, ' ').trim(),
+      description,
       priority: priority ? 5 - Number(priority[1]) : 1,
       project_id: target?.id ?? this.inbox.id,
       labels,

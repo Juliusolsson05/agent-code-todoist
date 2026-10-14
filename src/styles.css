@@ -208,6 +208,8 @@ kbd {
 .tok-project, .tok-section { background: color-mix(in srgb, #246fe0 22%, transparent); color: color-mix(in srgb, #4b8cf0 75%, var(--td-ink)); }
 .tok-label { background: color-mix(in srgb, var(--tone-week) 22%, transparent); color: color-mix(in srgb, var(--tone-week) 70%, var(--td-ink)); }
 .tok-assignee, .tok-deadline { background: color-mix(in srgb, var(--tone-tomorrow) 22%, transparent); color: color-mix(in srgb, var(--tone-tomorrow) 70%, var(--td-ink)); }
+/* Everything after " // " is the task description. Colour only: the mirror must keep the textarea's exact glyph metrics, so no italic or weight. */
+.tok-description { color: var(--td-muted); }
 
 /* ---------- list ---------- */
 .td-list { flex: 1; overflow-y: auto; padding: 0 6px 60px; scroll-padding: 40px; }

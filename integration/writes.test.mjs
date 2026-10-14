@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import { after, before, test } from 'node:test'
 
 import * as h from '../server/handlers.ts'
+import { applyFollowUps, PartialAdd, planFollowUps } from '../src/shared/quickAddPlan.ts'
+import { tdErrorCode } from '../src/shared/types.ts'
 import { dayFromToday } from '../tests/support/fakeTodoist.mjs'
 import { due, seed } from '../tests/support/scenario.mjs'
 import { startWorld } from '../tests/support/world.mjs'
@@ -142,6 +144,66 @@ test('create project, section and label', async () => {
   const label = await h.createLabel({ name: '@waiting', color: 'orange' })
   assert.deepEqual(lastWrite('POST', '/api/v1/labels').body, { name: 'waiting', color: 'orange' }, 'a typed @ is not part of the stored name')
   assert.ok((await h.meta({})).labels.some(l => l.id === label.id))
+})
+
+// ---- quick add as the views do it (src/shared/quickAddPlan.ts) ------------
+//
+// Raw line to Todoist's parser, then structured follow-ups decided from the
+// task it returned. Review of PR #2 found the old text-appending approach put
+// " today" inside a " // description" and skipped the project move for any
+// "#123"-style issue number.
+
+const viewQuickAdd = async (text, intent) => {
+  const created = await h.quickAdd({ text })
+  await applyFollowUps(created, planFollowUps(created, { inboxId: world.fake.inbox.id, ...intent }), {
+    update: input => h.update(input),
+    move: input => h.move(input),
+  })
+  return world.fake.tasks.find(t => t.id === created.id)
+}
+
+test('Today view: a " // description" line keeps its description and is still due today', async () => {
+  const task = await viewQuickAdd('Fix login // see logs from prod', { due: 'today' })
+  assert.equal(lastWrite('POST', '/api/v1/tasks/quick').body.text, 'Fix login // see logs from prod', 'the typed line is sent untouched')
+  assert.equal(task.content, 'Fix login')
+  assert.equal(task.description, 'see logs from prod')
+  assert.equal(task.due?.date, dayFromToday(0))
+})
+
+test('project view: "Fix #123 crash" lands in the open project, title intact', async () => {
+  const task = await viewQuickAdd('Fix #123 crash', { projectId: s.home.id })
+  assert.equal(task.project_id, s.home.id)
+  assert.equal(task.content, 'Fix #123 crash', 'Todoist keeps an unmatched #word as text')
+})
+
+test('project view: a #project the parser matched wins over the open project', async () => {
+  const task = await viewQuickAdd('Plan offsite #Work', { projectId: s.home.id })
+  assert.equal(task.project_id, s.work.id)
+})
+
+test('label view with a multi-word label applies it as a label, not as text', async () => {
+  world.fake.addLabel({ name: 'waiting on', color: 'grey' })
+  const task = await viewQuickAdd('Chase invoice', { labels: ['waiting on'] })
+  assert.deepEqual(task.labels, ['waiting on'])
+  assert.equal(task.content, 'Chase invoice')
+})
+
+test('a follow-up that fails reports the existing task instead of inviting a duplicate', async () => {
+  world.fake.fail(r => r.method === 'POST' && /^\/api\/v1\/tasks\/[^/]+\/move$/.test(r.path), { status: 500, times: 1 })
+  const before = world.fake.tasks.length
+  await assert.rejects(viewQuickAdd('Half applied', { projectId: s.home.id }), error => {
+    assert.ok(error instanceof PartialAdd)
+    assert.match(error.message, /Added “Half applied”, but could not move it/)
+    return true
+  })
+  assert.equal(world.fake.tasks.length, before + 1, 'exactly one task exists; the caller must not re-add it')
+})
+
+test('a due string Todoist cannot parse is a typed failure, not a silent "today"', async () => {
+  const id = s.t.child.id
+  const result = await h.update({ id, due: 'blursday' }).then(() => 'resolved', error => tdErrorCode(error))
+  assert.equal(result, 'TD_FAILED')
+  assert.equal(task(id).due.date, dayFromToday(1), 'the old date is kept')
 })
 
 test('no write reached an endpoint the fake does not model', () => {

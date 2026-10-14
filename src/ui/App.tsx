@@ -2,10 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { colorHex } from '../shared/colors'
 import { groupByDay, groupCompleted, groupToday, type TaskGroup } from '../shared/dates'
-import { tokenize } from '../shared/quickAddTokens'
+import { applyFollowUps, PartialAdd, planFollowUps } from '../shared/quickAddPlan'
 import type { ApiPriority, ListQuery, Meta, SectionRow, TaskRow } from '../shared/types'
 import { tdErrorCode, tdErrorMessage } from '../shared/types'
 import { useBridge, useHostState, useNow, usePersistent } from './bridge'
+import { isActivatable, onKeyAfterReact } from './keys'
 import { CloseIcon, ExternalIcon, InboxIcon, KeyboardIcon, PlusIcon, RefreshIcon, SearchIcon, SidebarIcon } from './Icons'
 import { QuickAddBar, type QuickAddHandle } from './QuickAddBar'
 import { SetupScreen } from './SetupScreen'
@@ -18,8 +19,9 @@ import { TaskItem, type Lookup } from './TaskItem'
 // State ownership, from slowest-changing to fastest:
 //   host (runtime publication)  setup status, settings, `revision`
 //   meta                        projects/sections/labels/filters — refetched on revision
-//   view                        which list is shown — persisted per extension
-//   page                        the tasks of that list — refetched on view/revision
+//   view                        which list is shown — starts at the "Open on" setting
+//   page                        the tasks of that list — refetched on view/revision,
+//                               keeping as many pages as the user had loaded
 //   completing / toasts / focus purely local UI
 //
 // The one rule that keeps this coherent: after ANY successful mutation, the
@@ -51,7 +53,10 @@ export function App() {
 
 function Workspace({ revision, defaultView, now, user }: { revision: number; defaultView: 'today' | 'upcoming' | 'inbox'; now: Date; user: import('../shared/types').UserRow | null }) {
   const bridge = useBridge()
-  const [view, setView, viewLoaded] = usePersistent<ListQuery>(bridge, 'todoist.ui.view', { kind: defaultView })
+  // Not persisted: Settings has an "Open on" row, and a remembered last view
+  // made it do nothing after the first session (review of PR #2). Within one
+  // open pane the view is plain state.
+  const [view, setView] = useState<ListQuery>({ kind: defaultView })
   const [sidebarPref, setSidebarPref] = usePersistent<boolean>(bridge, 'todoist.ui.sidebar', true)
   const [baseMeta, setMeta] = useState<Meta | null>(null)
   // Sections arrive per project (td cannot list them account-wide; see
@@ -79,6 +84,14 @@ function Workspace({ revision, defaultView, now, user }: { revision: number; def
   const searchInput = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const requestSeq = useRef(0)
+  /** Pages of the current list loaded so far ("Load more" adds one). A refetch
+   *  after a mutation reloads the same number, so acting on a task from page 2
+   *  does not snap the list back to page 1 and lose the user's place. */
+  const pagesLoaded = useRef(1)
+  /** Ids with a complete/reopen in flight. A ref, not state: the second click
+   *  of a double click arrives before React re-renders, and two `complete`
+   *  calls on a recurring task advance it twice (skipping an occurrence). */
+  const toggling = useRef(new Set<string>())
 
   const narrow = width < 640
   const drawerOverlays = width < 820
@@ -125,21 +138,32 @@ function Workspace({ revision, defaultView, now, user }: { revision: number; def
     [baseMeta, sectionCache],
   )
 
-  const load = useCallback(async (query: ListQuery, append = false, from: string | null = null) => {
+  const load = useCallback(async (query: ListQuery, mode: 'reset' | 'refresh' | 'append' = 'reset', from: string | null = null) => {
     const seq = ++requestSeq.current
+    const append = mode === 'append'
     if (append) setLoadingMore(true)
     else setLoading(true)
     try {
-      const page = await bridge.call('list', { ...query, cursor: from })
+      let page = await bridge.call('list', { ...query, cursor: append ? from : null })
+      let rows = page.tasks
+      if (mode === 'refresh') {
+        // Reload as many pages as were showing before the change.
+        for (let n = 1; n < pagesLoaded.current && page.nextCursor && seq === requestSeq.current; n++) {
+          page = await bridge.call('list', { ...query, cursor: page.nextCursor })
+          rows = [...rows, ...page.tasks.filter(t => !rows.some(r => r.id === t.id))]
+        }
+      }
       // A slower response for a view the user already left must not overwrite
       // the current one.
       if (seq !== requestSeq.current) return
-      setTasks(current => (append ? [...current, ...page.tasks.filter(t => !current.some(c => c.id === t.id))] : page.tasks))
+      if (append) pagesLoaded.current += 1
+      else if (mode === 'reset') pagesLoaded.current = 1
+      setTasks(current => (append ? [...current, ...rows.filter(t => !current.some(c => c.id === t.id))] : rows))
       setCursor(page.nextCursor)
       setTruncated(page.truncated)
       setListError(null)
       if (!append && (query.kind === 'today' || query.kind === 'inbox')) {
-        const open = page.tasks.filter(t => !t.completedAt).length
+        const open = rows.filter(t => !t.completedAt).length
         setCounts(c => ({ ...c, [query.kind]: page.nextCursor ? null : open }))
       }
     } catch (error) {
@@ -155,11 +179,14 @@ function Workspace({ revision, defaultView, now, user }: { revision: number; def
   }, [bridge, fail])
 
   const viewKey = JSON.stringify(view)
+  const lastLoaded = useRef<string | null>(null)
   useEffect(() => {
-    if (!viewLoaded) return
-    void load(view)
+    // Same view, new revision = something changed: keep the user's pages.
+    const sameList = lastLoaded.current === viewKey
+    lastLoaded.current = viewKey
+    void load(view, sameList ? 'refresh' : 'reset')
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewKey, revision, viewLoaded, load])
+  }, [viewKey, revision, load])
 
   // ---- lookups ----------------------------------------------------------
   const lookup: Lookup = useMemo(() => {
@@ -186,13 +213,18 @@ function Workspace({ revision, defaultView, now, user }: { revision: number; def
   const flat = useMemo(() => groups.flatMap(g => g.tasks), [groups])
 
   // ---- actions ----------------------------------------------------------
-  const toggle = useCallback(async (task: TaskRow) => {
+  /** Complete or reopen. Resolves to whether the server accepted it, so the
+   *  drawer can reload instead of painting a result that did not happen. */
+  const toggle = useCallback(async (task: TaskRow): Promise<boolean> => {
+    if (toggling.current.has(task.id)) return false
+    toggling.current.add(task.id)
+    const done = () => { toggling.current.delete(task.id) }
     if (task.completedAt) {
       try {
         await bridge.call('uncomplete', { id: task.id })
         toast('Task reopened')
-      } catch (error) { fail(error) }
-      return
+        return true
+      } catch (error) { fail(error); return false } finally { done() }
     }
     setCompleting(set => new Set(set).add(task.id))
     try {
@@ -203,10 +235,18 @@ function Workspace({ revision, defaultView, now, user }: { revision: number; def
           run: () => { void bridge.call('uncomplete', { id: task.id }).then(() => toast('Task reopened'), fail) },
         },
       })
-      setTimeout(() => setCompleting(set => { const next = new Set(set); next.delete(task.id); return next }), COMPLETE_ANIMATION_MS)
+      // Keep the guard up until the fade-out ends: the row still shows (as
+      // "Reopen") and a click there must not send a second complete.
+      setTimeout(() => {
+        setCompleting(set => { const next = new Set(set); next.delete(task.id); return next })
+        done()
+      }, COMPLETE_ANIMATION_MS)
+      return true
     } catch (error) {
       setCompleting(set => { const next = new Set(set); next.delete(task.id); return next })
+      done()
       fail(error)
+      return false
     }
   }, [bridge, toast, fail])
 
@@ -217,31 +257,40 @@ function Workspace({ revision, defaultView, now, user }: { revision: number; def
       await bridge.call('update', { id: task.id, ...change })
     } catch (error) {
       fail(error)
-      void load(view)
+      void load(view, 'refresh')
     }
   }, [bridge, fail, load, view])
 
   const submitQuickAdd = useCallback(async (text: string): Promise<boolean> => {
-    // Make the new task land IN the view the user is looking at, the way
-    // Todoist's own per-view quick add does.
-    const tokens = tokenize(text)
-    let line = text
-    if (view.kind === 'today' && !tokens.some(t => t.kind === 'date')) line = `${text} today`
-    if (view.kind === 'label' && view.query && !tokens.some(t => t.kind === 'label' && t.text.slice(1).replace(/"/g, '') === view.query)) {
-      line = `${line} @${/\s/.test(view.query) ? `"${view.query}"` : view.query}`
-    }
+    // The typed line goes to Todoist's parser untouched; making the task land
+    // IN the current view (like Todoist's own per-view quick add) is done
+    // afterwards from what the parser returned — see src/shared/quickAddPlan.ts.
+    let created
     try {
-      const created = await bridge.call('quickAdd', { text: line })
-      if (view.kind === 'project' && view.id && created.projectId !== view.id && !tokens.some(t => t.kind === 'project')) {
-        await bridge.call('move', { id: created.id, projectId: view.id })
-      }
-      toast(`Added “${created.content}”`, { action: { label: 'Open', run: () => setOpenId(created.id) } })
-      return true
+      created = await bridge.call('quickAdd', { text })
     } catch (error) {
       fail(error)
-      return false
+      return false // nothing was created: keep the text for a retry
     }
-  }, [bridge, view, toast, fail])
+    try {
+      await applyFollowUps(created, planFollowUps(created, {
+        due: view.kind === 'today' ? 'today' : null,
+        labels: view.kind === 'label' && view.query ? [view.query] : [],
+        projectId: view.kind === 'project' ? view.id : null,
+        inboxId: inboxProject?.id ?? null,
+      }), {
+        update: input => bridge.call('update', input),
+        move: input => bridge.call('move', input),
+      })
+      toast(`Added “${created.content}”`, { action: { label: 'Open', run: () => setOpenId(created.id) } })
+    } catch (error) {
+      // The task EXISTS. Clear the input anyway (return true): a retry would
+      // create a duplicate. Say exactly what is missing and offer the task.
+      const message = error instanceof PartialAdd ? `${error.message} ${tdErrorMessage(error.cause)}` : tdErrorMessage(error)
+      toast(message, { tone: 'error', action: { label: 'Open', run: () => setOpenId(created.id) } })
+    }
+    return true
+  }, [bridge, view, toast, fail, inboxProject?.id])
 
   const createLabel = useCallback(async (name: string) => {
     try {
@@ -258,7 +307,7 @@ function Workspace({ revision, defaultView, now, user }: { revision: number; def
       setCursor(null)
       setView(next)
     } else {
-      void load(next)
+      void load(next, 'reset')
     }
     listRef.current?.scrollTo({ top: 0 })
   }, [view, setView, load])
@@ -276,17 +325,28 @@ function Workspace({ revision, defaultView, now, user }: { revision: number; def
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchText, searching])
 
+  const closeSearch = useCallback(() => {
+    setSearching(false)
+    setSearchText('')
+    // Leaving search also leaves the search RESULTS, or the title would keep
+    // saying "Search: foo" over a list the user dismissed.
+    if (view.kind === 'search') { setTasks([]); setView({ kind: defaultView }) }
+  }, [view.kind, defaultView])
+
   // ---- keyboard ---------------------------------------------------------
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement
       const typing = target.closest('input, textarea, select, [contenteditable="true"]')
       if (event.key === 'Escape') {
+        // Something deeper (a popover, an input's own Escape) already used it.
+        if (event.defaultPrevented) return
         // Our Escape, never the host's (which would close the pane): close the
-        // innermost thing that is open.
+        // innermost thing that is open. preventDefault is what tells the host
+        // to stay out — see keys.ts for why this listener sits on `document`.
         if (help) { event.preventDefault(); setHelp(false); return }
         if (openId) { event.preventDefault(); setOpenId(null); return }
-        if (searching) { event.preventDefault(); setSearching(false); setSearchText(''); return }
+        if (searching || view.kind === 'search') { event.preventDefault(); closeSearch(); return }
         if (overlaySidebar) { event.preventDefault(); setOverlaySidebar(false); return }
         return
       }
@@ -301,6 +361,10 @@ function Workspace({ revision, defaultView, now, user }: { revision: number; def
         if (openId) setOpenId(next.id)
       }
       const key = event.key
+      // Enter and Space belong to a focused button or link (Refresh, Undo,
+      // Delete…). Taking them for the focused TASK cancelled those buttons'
+      // clicks (review of PR #2, reproduced in Chromium).
+      if ((key === 'Enter' || key === ' ') && isActivatable(target)) return
       if (key === 'j' || key === 'ArrowDown') { event.preventDefault(); move(1) }
       else if (key === 'k' || key === 'ArrowUp') { event.preventDefault(); move(-1) }
       else if ((key === 'Enter' || key === 'o') && focused) { event.preventDefault(); setOpenId(focused.id) }
@@ -309,14 +373,13 @@ function Workspace({ revision, defaultView, now, user }: { revision: number; def
       else if (key === 't' && focused) { event.preventDefault(); void patch(focused, { due: 'today' }) }
       else if (key === 'q' || key === 'a') { event.preventDefault(); quickAdd.current?.focus() }
       else if (key === '/') { event.preventDefault(); setSearching(true); requestAnimationFrame(() => searchInput.current?.focus()) }
-      else if (key === 'r') { event.preventDefault(); void load(view); void bridge.call('meta', {}).then(setMeta, () => {}) }
+      else if (key === 'r') { event.preventDefault(); void load(view, 'refresh'); void bridge.call('meta', {}).then(setMeta, () => {}) }
       else if (key === '[') { event.preventDefault(); if (narrow) setOverlaySidebar(v => !v); else setSidebarPref(!sidebarPref) }
       else if (key === '?') { event.preventDefault(); setHelp(v => !v) }
       else if (key === 'g') { /* reserved for g-chords */ }
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [flat, focusId, openId, searching, overlaySidebar, help, toggle, patch, load, view, bridge, narrow, sidebarPref, setSidebarPref])
+    return onKeyAfterReact(onKey)
+  }, [flat, focusId, openId, searching, overlaySidebar, help, toggle, patch, load, view, bridge, narrow, sidebarPref, setSidebarPref, closeSearch])
 
   // ---- render -----------------------------------------------------------
   const title = viewTitle(view, meta)
@@ -344,9 +407,10 @@ function Workspace({ revision, defaultView, now, user }: { revision: number; def
                 try {
                   const project = await bridge.call('createProject', { name, color })
                   selectView({ kind: 'project', id: project.id })
-                } catch (error) { fail(error) }
+                  return true
+                } catch (error) { fail(error); return false }
               }}
-              onCreateLabel={async name => { try { await createLabel(name) } catch { /* toast shown */ } }}
+              onCreateLabel={async name => { try { await createLabel(name); return true } catch { return false /* toast shown */ } }}
               onSignOut={() => { void bridge.call('logout', {}).catch(fail) }}
             />
           </>
@@ -366,11 +430,11 @@ function Workspace({ revision, defaultView, now, user }: { revision: number; def
                   onChange={e => setSearchText(e.target.value)}
                   placeholder="Search tasks"
                   onKeyDown={e => {
-                    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setSearching(false); setSearchText('') }
+                    if (e.key === 'Escape') { e.preventDefault(); closeSearch() }
                     if (e.key === 'ArrowDown') { e.preventDefault(); (e.target as HTMLInputElement).blur(); if (flat[0]) setFocusId(flat[0].id) }
                   }}
                 />
-                <button className="td-icon-btn sm" onClick={() => { setSearching(false); setSearchText('') }} title="Close search"><CloseIcon size={12} /></button>
+                <button className="td-icon-btn sm" onClick={closeSearch} title="Close search"><CloseIcon size={12} /></button>
               </div>
             ) : (
               <div className="td-title">
@@ -383,7 +447,7 @@ function Workspace({ revision, defaultView, now, user }: { revision: number; def
             <div className="td-header-tools">
               {currentProject && <button className="td-icon-btn" title="Open project in Todoist" onClick={() => openUrl(currentProject.url)}><ExternalIcon /></button>}
               <button className="td-icon-btn" title="Keyboard shortcuts (?)" onClick={() => setHelp(true)}><KeyboardIcon /></button>
-              <button className={`td-icon-btn${loading ? ' is-spinning' : ''}`} title="Refresh (r)" onClick={() => { void load(view); void bridge.call('meta', {}).then(setMeta, () => {}) }}>
+              <button className={`td-icon-btn${loading ? ' is-spinning' : ''}`} title="Refresh (r)" onClick={() => { void load(view, 'refresh'); void bridge.call('meta', {}).then(setMeta, () => {}) }}>
                 <RefreshIcon />
               </button>
             </div>
@@ -407,7 +471,7 @@ function Workspace({ revision, defaultView, now, user }: { revision: number; def
               <div className="td-empty">
                 <p>Couldn’t load this list.</p>
                 <p className="td-dim td-small">{listError}</p>
-                <button className="td-btn" onClick={() => void load(view)}>Try again</button>
+                <button className="td-btn" onClick={() => void load(view, 'reset')}>Try again</button>
               </div>
             ) : !flat.length ? (
               <EmptyState view={view} />
@@ -446,11 +510,11 @@ function Workspace({ revision, defaultView, now, user }: { revision: number; def
             {(cursor || truncated) && flat.length > 0 && (
               <div className="td-more">
                 {cursor ? (
-                  <button className="td-btn" disabled={loadingMore} onClick={() => void load(view, true, cursor)}>
+                  <button className="td-btn" disabled={loadingMore} onClick={() => void load(view, 'append', cursor)}>
                     {loadingMore ? <span className="td-spinner" /> : null} Load more
                   </button>
                 ) : (
-                  <span className="td-dim td-small">Showing the first {flat.length} tasks. Narrow the list with a project, label or search.</span>
+                  <span className="td-dim td-small">Showing the first {flat.length} tasks — this filter has more than can be loaded here. Open it in Todoist for the rest.</span>
                 )}
               </div>
             )}
@@ -490,7 +554,7 @@ function Workspace({ revision, defaultView, now, user }: { revision: number; def
               onClose={() => setOpenId(null)}
               onToggle={toggle}
               onOpenTask={id => setOpenId(id)}
-              onChanged={() => {}}
+              revision={revision}
               onError={message => toast(message, { tone: 'error' })}
               onOpenUrl={openUrl}
               onCreateLabel={createLabel}
@@ -625,7 +689,7 @@ function ShortcutHelp({ onClose }: { onClose: () => void }) {
     ['t', 'Schedule for today'],
     ['r', 'Refresh'],
     ['[', 'Toggle sidebar'],
-    ['Esc', 'Close drawer / search'],
+    ['Esc', 'Close help / drawer / search'],
     ['⌘⌥T', 'Quick Add from anywhere in Agent Code'],
   ]
   return (

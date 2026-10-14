@@ -35,8 +35,11 @@ try {
   // start-up apiece) and assert our 20 s per-call deadline. Running them in
   // parallel on a busy machine pushed td past that deadline and produced
   // load-dependent failures, so they run one file at a time.
-  const concurrency = dir === 'integration' ? ['--test-concurrency=1'] : []
-  const result = spawnSync(process.execPath, ['--test', ...concurrency, ...files.map(f => join(out, f))], { stdio: 'inherit' })
+  const concurrency = dir === 'integration' || dir === 'uitests' ? ['--test-concurrency=1'] : []
+  // TEST_NAME_PATTERN=… runs only matching tests (e.g. one UI case while
+  // mutation-checking it); the suites are too slow to rerun whole each time.
+  const only = process.env.TEST_NAME_PATTERN ? [`--test-name-pattern=${process.env.TEST_NAME_PATTERN}`] : []
+  const result = spawnSync(process.execPath, ['--test', ...concurrency, ...only, ...files.map(f => join(out, f))], { stdio: 'inherit' })
   process.exitCode = result.status ?? 1
 } finally {
   await rm(out, { recursive: true, force: true })

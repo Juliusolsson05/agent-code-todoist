@@ -22,7 +22,10 @@ export const QuickAddBar = forwardRef<QuickAddHandle, {
   large?: boolean
 }>(function QuickAddBar({ placeholder, contextLabel, disabled, onSubmit, autoFocus, large }, ref) {
   const [text, setText] = useState('')
-  const [busy, setBusy] = useState(false)
+  // How many adds are in flight. A count, not a flag: rapid entry ("one ⏎
+  // two ⏎") runs adds side by side.
+  const [pending, setPending] = useState(0)
+  const busy = pending > 0
   const input = useRef<HTMLInputElement>(null)
   const mirror = useRef<HTMLDivElement>(null)
   useImperativeHandle(ref, () => ({ focus: () => input.current?.focus() }), [])
@@ -33,14 +36,19 @@ export const QuickAddBar = forwardRef<QuickAddHandle, {
 
   const submit = async () => {
     const value = text.trim()
-    if (!value || busy) return
-    setBusy(true)
+    if (!value) return
+    // Clear at submit, not on success: the first version cleared when the add
+    // FINISHED, wiping whatever the user had typed next in the meantime, and
+    // ignored an Enter pressed while busy — so fast entry lost tasks (found by
+    // the UI suite). An emptied field also makes a double Enter harmless.
+    setText('')
+    setPending(n => n + 1)
     try {
-      // Only clear on success: a failed add (offline, signed out) must not eat
-      // what the user typed.
-      if (await onSubmit(value)) setText('')
+      // A failed add (offline, signed out) must not eat what the user typed:
+      // put it back, unless they have already started the next line.
+      if (!(await onSubmit(value))) setText(current => current || value)
     } finally {
-      setBusy(false)
+      setPending(n => n - 1)
       requestAnimationFrame(() => input.current?.focus())
     }
   }
@@ -90,8 +98,8 @@ export const QuickAddBar = forwardRef<QuickAddHandle, {
             }}
           />
         </div>
-        <button type="button" className="td-btn td-btn-primary td-quickadd-submit" disabled={!text.trim() || busy || disabled} onClick={() => void submit()}>
-          {busy ? <span className="td-spinner" /> : 'Add'}
+        <button type="button" className="td-btn td-btn-primary td-quickadd-submit" disabled={!text.trim() || disabled} onClick={() => void submit()}>
+          {busy && !text.trim() ? <span className="td-spinner" /> : 'Add'}
         </button>
       </div>
       {(hasMarkers || contextLabel) && (

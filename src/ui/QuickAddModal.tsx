@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { colorHex, PRIORITY_COLORS } from '../shared/colors'
+import { isAgentSession } from '../shared/agents'
+import { applyFollowUps, PartialAdd, planFollowUps } from '../shared/quickAddPlan'
 import { contentPreview, tokenize } from '../shared/quickAddTokens'
 import type { AgentLink, ApiPriority, Meta, SectionRow } from '../shared/types'
 import { tdErrorMessage } from '../shared/types'
@@ -56,8 +58,7 @@ export function QuickAddModal() {
         if (!alive) return
         const activeLeaves = new Set(panes.find(p => p.tabId === workspace.activeTabId)?.leafSessionIds ?? [])
         const list: AgentLink[] = sessions
-          // Agents only: terminals and extension panes are not "work an agent did".
-          .filter(s => s.kind && !/terminal|shell|extension/i.test(s.kind))
+          .filter(s => isAgentSession(s.kind))
           .map(s => ({ id: s.id, title: s.title || s.kind || 'Agent', cwd: s.cwd, kind: s.kind, inActiveTab: activeLeaves.has(s.id), working: s.activity === 'working' }))
           .sort((a, b) => Number(b.inActiveTab) - Number(a.inActiveTab) || a.title.localeCompare(b.title))
         setAgents(list.slice(0, 12))
@@ -92,35 +93,44 @@ export function QuickAddModal() {
     if (!line || busy) return
     setBusy(true)
     setError(null)
+    // The line goes to Todoist's parser untouched; the pickers are applied
+    // afterwards where the parser did not already (src/shared/quickAddPlan.ts
+    // explains why appending " tomorrow p1" to the text was wrong).
+    let created
     try {
-      // Picker values become quick-add syntax where Todoist has syntax for them
-      // (one round-trip, server-side parsing), and follow-up calls otherwise.
-      let full = line
-      if (due && !tokens.some(t => t.kind === 'date')) full += ` ${due}`
-      if (priority > 1 && !tokens.some(t => t.kind === 'priority')) full += ` p${5 - priority}`
-      const created = await bridge.call('quickAdd', { text: full })
-      const extraLabels = labels.filter(l => !created.labels.includes(l))
-      const description = agent ? agentNote(agent, created.description) : null
-      if (extraLabels.length || description !== null) {
-        await bridge.call('update', {
-          id: created.id,
-          ...(extraLabels.length ? { labels: [...created.labels, ...extraLabels] } : {}),
-          ...(description !== null ? { description } : {}),
-        })
-      }
-      if (target && !tokens.some(t => t.kind === 'project') && (created.projectId !== target.projectId || target.sectionId)) {
-        await bridge.call('move', { id: created.id, projectId: target.projectId, ...(target.sectionId ? { sectionId: target.sectionId } : {}) })
-      }
-      if (keepOpen) {
-        setText('')
-        setAdded(created.content)
-        setTimeout(() => setAdded(null), 2500)
-        input.current?.focus()
-      } else {
-        await bridge.context.api.ui.close()
-      }
+      created = await bridge.call('quickAdd', { text: line })
     } catch (e) {
-      setError(tdErrorMessage(e))
+      setError(tdErrorMessage(e)) // nothing created: keep the text for a retry
+      setBusy(false)
+      return
+    }
+    const inboxId = baseMeta?.projects.find(p => p.isInbox)?.id ?? null
+    const finish = () => {
+      setText('')
+      setAdded(created.content)
+      setTimeout(() => setAdded(null), 2500)
+      input.current?.focus()
+    }
+    try {
+      await applyFollowUps(created, planFollowUps(created, {
+        due: due || null,
+        priority,
+        labels,
+        projectId: target?.projectId ?? null,
+        sectionId: target?.sectionId ?? null,
+        inboxId,
+        note: agent ? agentNote(agent) : null,
+      }), {
+        update: input => bridge.call('update', input),
+        move: input => bridge.call('move', input),
+      })
+      if (keepOpen) finish()
+      else await bridge.context.api.ui.close()
+    } catch (e) {
+      // The task exists; clear the field so Enter cannot add it twice, keep
+      // the modal open and say exactly what did not happen.
+      finish()
+      setError(e instanceof PartialAdd ? `${e.message} ${tdErrorMessage(e.cause)}` : tdErrorMessage(e))
     } finally {
       setBusy(false)
     }
@@ -212,7 +222,6 @@ export function QuickAddModal() {
   )
 }
 
-function agentNote(agent: AgentLink, existing: string): string {
-  const line = `From agent: **${agent.title}** — \`${agent.cwd}\``
-  return existing ? `${existing}\n\n${line}` : line
+function agentNote(agent: AgentLink): string {
+  return `From agent: **${agent.title}** — \`${agent.cwd}\``
 }

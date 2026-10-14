@@ -98,6 +98,9 @@ export function SetupScreen({ setup, onRetry }: { setup: SetupStatus | null; onR
             <div>
               <b>Installing todoist-cli with Homebrew…</b>
               <div className="td-dim td-small">{elapsed}. This can take a few minutes the first time.</div>
+              <div className="td-progress-actions">
+                <button className="td-btn td-btn-ghost" onClick={() => void act('cancel', () => bridge.call('cancelJob', {}))}>Cancel</button>
+              </div>
             </div>
           </div>
         )}
@@ -123,12 +126,13 @@ export function SetupScreen({ setup, onRetry }: { setup: SetupStatus | null; onR
             <div>
               <b>Waiting for you to approve access in your browser…</b>
               <div className="td-dim td-small">{elapsed}. Come back here when the page says you are signed in.</div>
-              {job.authorizeUrl && (
-                <div className="td-progress-actions">
-                  <button className="td-btn" onClick={() => void bridge.call('openUrl', { url: job.authorizeUrl! })}><ExternalIcon size={13} /> Open the page again</button>
-                  <button className="td-btn td-btn-ghost" onClick={() => void act('cancel', () => bridge.call('cancelJob', {}))}>Cancel</button>
-                </div>
-              )}
+              {/* Cancel is always offered: a login whose URL td never printed
+                  (or that we failed to recognise) must not trap the user for
+                  the 5-minute limit with no way out (review of PR #2). */}
+              <div className="td-progress-actions">
+                {job.authorizeUrl && <button className="td-btn" onClick={() => void bridge.call('openUrl', { url: job.authorizeUrl! })}><ExternalIcon size={13} /> Open the page again</button>}
+                <button className="td-btn td-btn-ghost" onClick={() => void act('cancel', () => bridge.call('cancelJob', {}))}>Cancel</button>
+              </div>
             </div>
           </div>
         )}

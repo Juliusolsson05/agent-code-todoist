@@ -10,7 +10,7 @@
 // confidently WRONG (marking text that Todoist will keep as content) is worse
 // than not marking it, hence the conservative date vocabulary.
 
-export type TokenKind = 'priority' | 'project' | 'label' | 'section' | 'assignee' | 'deadline' | 'date' | 'text'
+export type TokenKind = 'priority' | 'project' | 'label' | 'section' | 'assignee' | 'deadline' | 'date' | 'description' | 'text'
 export type Token = { kind: TokenKind; text: string; start: number; end: number }
 
 const WEEKDAYS = '(?:mon(?:day)?|tue(?:s(?:day)?)?|wed(?:nesday)?|thu(?:rs(?:day)?)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)'
@@ -40,11 +40,21 @@ const PATTERN = new RegExp(
   'gi',
 )
 
+/** Todoist quick add: " // description text" (must be at the end) — the
+ *  OpenAPI spec's /api/v1/tasks/quick description. Everything after it is the
+ *  description, so nothing in it is a date, label or project. A URL's "//" has
+ *  no whitespace before it and is not a marker. */
+const DESCRIPTION = /(?:^|\s)\/\/(?=\s|$)/
+
 export function tokenize(input: string): Token[] {
   const tokens: Token[] = []
+  const marker = DESCRIPTION.exec(input)
+  // The marker's own leading space stays with the title side.
+  const descriptionAt = marker ? marker.index + (marker[0].startsWith('/') ? 0 : 1) : input.length
+  const head = input.slice(0, descriptionAt)
   let last = 0
   PATTERN.lastIndex = 0
-  for (let match = PATTERN.exec(input); match; match = PATTERN.exec(input)) {
+  for (let match = PATTERN.exec(head); match; match = PATTERN.exec(head)) {
     if (match[0].length === 0) { PATTERN.lastIndex++; continue }
     const groups = match.groups ?? {}
     const kind = (Object.keys(groups).find(key => groups[key] !== undefined) ?? 'text') as TokenKind
@@ -52,7 +62,8 @@ export function tokenize(input: string): Token[] {
     tokens.push({ kind, text: match[0], start: match.index, end: match.index + match[0].length })
     last = match.index + match[0].length
   }
-  if (last < input.length) tokens.push({ kind: 'text', text: input.slice(last), start: last, end: input.length })
+  if (last < head.length) tokens.push({ kind: 'text', text: head.slice(last), start: last, end: head.length })
+  if (descriptionAt < input.length) tokens.push({ kind: 'description', text: input.slice(descriptionAt), start: descriptionAt, end: input.length })
   return tokens
 }
 

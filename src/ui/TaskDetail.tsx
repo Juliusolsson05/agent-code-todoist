@@ -15,21 +15,29 @@ import { DuePicker, LabelPicker, PriorityPicker, ProjectPicker } from './pickers
 // The task drawer: everything about one task, editable in place.
 //
 // Each field saves on its own (one `td task update` per change) instead of a
-// form with a Save button: that is how Todoist itself behaves, and it means a
-// half-edited drawer never holds unsaved state the user can lose by switching
-// tasks. Saves are optimistic in the drawer and reconciled with td's returned
-// task; the list refreshes through the runtime's revision bump.
+// form with a Save button: that is how Todoist itself behaves. The two text
+// editors (title, description) hold a draft while open; switching to another
+// task or closing the drawer SAVES that draft rather than dropping it (the
+// description editor used to lose it silently — review of PR #2).
+//
+// Reconciliation: field edits are optimistic and replaced by td's returned
+// task. Anything whose outcome only the server knows — completing (a recurring
+// task rolls forward instead of closing), a failed save — reloads the task
+// instead of painting a guess. And every revision bump (a change from the list,
+// the modal, another pane) reloads it too, so the drawer never shows stale state.
 
 const DURATIONS = ['15m', '30m', '45m', '1h', '1h30m', '2h', '3h', '4h']
 
-export function TaskDetailPanel({ taskId, meta, now, onClose, onToggle, onOpenTask, onChanged, onError, onOpenUrl, onCreateLabel, onNeedSections }: {
+export function TaskDetailPanel({ taskId, meta, now, revision, onClose, onToggle, onOpenTask, onError, onOpenUrl, onCreateLabel, onNeedSections }: {
   taskId: string
   meta: Meta
   now: Date
+  /** The runtime's change counter: a new value means "reload". */
+  revision: number
   onClose: () => void
-  onToggle: (task: TaskRow) => Promise<void> | void
+  /** Resolves true when the server accepted the complete/reopen. */
+  onToggle: (task: TaskRow) => Promise<boolean>
   onOpenTask: (id: string) => void
-  onChanged: () => void
   onError: (message: string) => void
   onOpenUrl: (url: string) => void
   onCreateLabel: (name: string) => Promise<void>
@@ -39,8 +47,15 @@ export function TaskDetailPanel({ taskId, meta, now, onClose, onToggle, onOpenTa
   const bridge = useBridge()
   const [detail, setDetail] = useState<Detail | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [editing, setEditing] = useState<null | 'title' | 'description'>(null)
-  const [draft, setDraft] = useState('')
+  const [editing, setEditingState] = useState<null | 'title' | 'description'>(null)
+  const [draft, setDraftState] = useState('')
+  // Mirrors read synchronously: by Enter's blur and by the unmount save, which
+  // both run before React has re-rendered the state.
+  const editingRef = useRef<null | 'title' | 'description'>(null)
+  const draftRef = useRef('')
+  const taskRef = useRef<TaskRow | null>(null)
+  const setEditing = (value: null | 'title' | 'description') => { editingRef.current = value; setEditingState(value) }
+  const setDraft = (value: string) => { draftRef.current = value; setDraftState(value) }
   const [menu, setMenu] = useState<null | 'due' | 'priority' | 'labels' | 'project'>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [comment, setComment] = useState('')
@@ -66,6 +81,26 @@ export function TaskDetailPanel({ taskId, meta, now, onClose, onToggle, onOpenTa
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId])
 
+  const firstRevision = useRef(revision)
+  useEffect(() => {
+    if (revision === firstRevision.current) return
+    void load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [revision])
+
+  taskRef.current = detail?.task ?? null
+
+  // Leaving with an open editor (another task clicked, drawer closed) saves
+  // the draft. The drawer is keyed by task id, so this runs on every switch.
+  useEffect(() => () => {
+    const field = editingRef.current
+    const task = taskRef.current
+    if (!field || !task) return
+    const change = draftChange(field, draftRef.current, task)
+    if (change) void bridge.call('update', { id: task.id, ...change }).catch(error => onError(tdErrorMessage(error)))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const patch = async (change: TaskPatch) => {
     if (!detail) return
     const before = detail
@@ -74,9 +109,11 @@ export function TaskDetailPanel({ taskId, meta, now, onClose, onToggle, onOpenTa
     try {
       const task = await bridge.call('update', { id: detail.task.id, ...change })
       setDetail(current => (current ? { ...current, task } : current))
-      onChanged()
     } catch (error) {
+      // Reload rather than restore `before`: a second edit made while this
+      // one was in flight may have succeeded, and `before` predates it.
       setDetail(before)
+      void load()
       onError(tdErrorMessage(error))
     }
   }
@@ -86,7 +123,6 @@ export function TaskDetailPanel({ taskId, meta, now, onClose, onToggle, onOpenTa
     try {
       await bridge.call('move', { id: detail.task.id, projectId, ...(sectionId ? { sectionId } : { noSection: true }) })
       setDetail({ ...detail, task: { ...detail.task, projectId, sectionId } })
-      onChanged()
     } catch (error) {
       onError(tdErrorMessage(error))
     }
@@ -125,11 +161,13 @@ export function TaskDetailPanel({ taskId, meta, now, onClose, onToggle, onOpenTa
   const tone = dueTone(task.due, now)
 
   const saveText = async () => {
-    const value = draft.trim()
-    const field = editing
+    // Enter saves and unmounts the title editor; if the browser then fires
+    // blur, this runs again — the ref is already cleared, so it is a no-op.
+    const field = editingRef.current
+    if (!field) return
     setEditing(null)
-    if (field === 'title' && value && value !== task.content) await patch({ content: value })
-    if (field === 'description' && draft !== task.description) await patch({ description: draft })
+    const change = draftChange(field, draftRef.current, task)
+    if (change) await patch(change)
   }
 
   return (
@@ -159,7 +197,6 @@ export function TaskDetailPanel({ taskId, meta, now, onClose, onToggle, onOpenTa
               onClick={async () => {
                 try {
                   await bridge.call('delete', { id: task.id })
-                  onChanged()
                   onClose()
                 } catch (error) {
                   onError(tdErrorMessage(error))
@@ -183,8 +220,9 @@ export function TaskDetailPanel({ taskId, meta, now, onClose, onToggle, onOpenTa
             style={{ '--prio': PRIORITY_COLORS[task.priority] } as React.CSSProperties}
             aria-label={done ? 'Reopen task' : 'Complete task'}
             onClick={async () => {
-              await onToggle(task)
-              setDetail(current => current ? { ...current, task: { ...current.task, completedAt: done ? null : new Date().toISOString() } } : current)
+              // Only the server knows the result: a recurring task moves to its
+              // next date instead of closing, and a failure changes nothing.
+              if (await onToggle(task)) void load()
             }}
           >
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4.6 8.3 2.3 2.3 4.6-4.9" /></svg>
@@ -296,8 +334,7 @@ export function TaskDetailPanel({ taskId, meta, now, onClose, onToggle, onOpenTa
                 style={{ '--prio': PRIORITY_COLORS[child.priority] } as React.CSSProperties}
                 aria-label="Complete sub-task"
                 onClick={async () => {
-                  await onToggle(child)
-                  setDetail(current => current ? { ...current, children: current.children.filter(c => c.id !== child.id) } : current)
+                  if (await onToggle(child)) void load()
                 }}
               >
                 <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4.6 8.3 2.3 2.3 4.6-4.9" /></svg>
@@ -317,7 +354,6 @@ export function TaskDetailPanel({ taskId, meta, now, onClose, onToggle, onOpenTa
                 const created = await bridge.call('add', { content, parentId: task.id, projectId: task.projectId })
                 setDetail(current => current ? { ...current, children: [...current.children, created] } : current)
                 setSubtask('')
-                onChanged()
               } catch (error) {
                 onError(tdErrorMessage(error))
               } finally {
@@ -393,6 +429,16 @@ export function TaskDetailPanel({ taskId, meta, now, onClose, onToggle, onOpenTa
       )}
     </aside>
   )
+}
+
+/** The update an editor's draft asks for, or null when nothing changed. An
+ *  empty title is never saved (Todoist requires one). */
+function draftChange(field: 'title' | 'description', draft: string, task: TaskRow): TaskPatch | null {
+  if (field === 'title') {
+    const value = draft.trim()
+    return value && value !== task.content ? { content: value } : null
+  }
+  return draft !== task.description ? { description: draft } : null
 }
 
 function durationValue(duration: { amount: number; unit: 'minute' | 'day' }): string {

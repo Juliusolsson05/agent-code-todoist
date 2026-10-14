@@ -22,8 +22,8 @@ export function Sidebar({ meta, current, counts, user, onSelect, onSearch, onCre
   user: UserRow | null
   onSelect: (view: ViewKey) => void
   onSearch: () => void
-  onCreateProject: (name: string, color: string) => Promise<void>
-  onCreateLabel: (name: string) => Promise<void>
+  onCreateProject: (name: string, color: string) => Promise<boolean>
+  onCreateLabel: (name: string) => Promise<boolean>
   onSignOut: () => void
 }) {
   const [open, setOpen] = useState({ favorites: true, projects: true, labels: false, filters: false })
@@ -55,8 +55,10 @@ export function Sidebar({ meta, current, counts, user, onSelect, onSearch, onCre
     event.preventDefault()
     const value = name.trim()
     if (!value) return
-    if (adding === 'project') await onCreateProject(value, color)
-    if (adding === 'label') await onCreateLabel(value)
+    const ok = adding === 'project' ? await onCreateProject(value, color) : adding === 'label' ? await onCreateLabel(value) : false
+    // On failure (offline, duplicate name) keep the form and what was typed;
+    // the error toast says why. Clearing it made the user retype (review).
+    if (!ok) return
     setName('')
     setAdding(null)
   }
