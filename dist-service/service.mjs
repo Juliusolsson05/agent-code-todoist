@@ -68,8 +68,8 @@ function runService(module) {
   });
 }
 
-// server/handlers.ts
-import { spawn as spawn3 } from "node:child_process";
+// server/invoke.ts
+import { randomUUID } from "node:crypto";
 
 // src/shared/budget.ts
 var HOST_MAX_CHARS = 128 * 1024;
@@ -87,25 +87,21 @@ function countJsonValues(value) {
   }
   return count;
 }
-function fitTasks(tasks, maxValues = PAGE_MAX_VALUES, maxChars = PAGE_MAX_CHARS) {
-  let values = 8;
-  let chars = 64;
-  const kept = [];
-  for (const task2 of tasks) {
-    const taskValues = countJsonValues(task2);
-    const taskChars = JSON.stringify(task2).length + 1;
-    if (values + taskValues > maxValues || chars + taskChars > maxChars) {
-      return { tasks: kept, truncated: true };
-    }
-    values += taskValues;
-    chars += taskChars;
-    kept.push(task2);
-  }
-  return { tasks: kept, truncated: false };
+var CHUNK_CHARS = 96e3;
+function fitsBridge(value) {
+  return countJsonValues(value) <= PAGE_MAX_VALUES && JSON.stringify(value ?? null).length <= PAGE_MAX_CHARS;
 }
-function pageOf(tasks, nextCursor) {
-  const fitted = fitTasks(tasks);
-  return { tasks: fitted.tasks, nextCursor: fitted.truncated ? null : nextCursor, truncated: fitted.truncated };
+function splitParts(json, size = CHUNK_CHARS) {
+  const parts = [];
+  let at = 0;
+  while (at < json.length) {
+    let end = Math.min(json.length, at + size);
+    const code = json.charCodeAt(end - 1);
+    if (end < json.length && code >= 55296 && code <= 56319) end--;
+    parts.push(json.slice(at, end));
+    at = end;
+  }
+  return parts.length ? parts : [""];
 }
 function toJson(value) {
   return value === void 0 ? null : JSON.parse(JSON.stringify(value));
@@ -113,6 +109,10 @@ function toJson(value) {
 var LIST_DESCRIPTION_CHARS = 280;
 var DETAIL_DESCRIPTION_CHARS = 16e3;
 var COMMENT_CHARS = 4e3;
+
+// server/handlers.ts
+import { AsyncLocalStorage } from "node:async_hooks";
+import { spawn as spawn3 } from "node:child_process";
 
 // src/shared/colors.ts
 var TODOIST_COLORS = {
@@ -250,6 +250,19 @@ function compactAll(items, fn) {
 
 // server/jobs.ts
 import { spawn } from "node:child_process";
+var KILL_GRACE_MS = 3e3;
+function signalGroup(child, signal) {
+  if (!child.pid) return;
+  try {
+    process.kill(-child.pid, signal);
+  } catch {
+  }
+}
+function stopGroup(child) {
+  signalGroup(child, "SIGTERM");
+  const escalate = setTimeout(() => signalGroup(child, "SIGKILL"), KILL_GRACE_MS);
+  escalate.unref?.();
+}
 var current = null;
 var last = null;
 var LIMITS = {
@@ -269,10 +282,10 @@ function startJob(job) {
     throw new Error(`BUSY: ${current.status.kind === "login" ? "Sign-in" : "Installation"} is still running.`);
   }
   const status2 = { kind: job.kind, state: "running", startedAt: Date.now(), authorizeUrl: null, detail: null };
-  const child = spawn(job.command, job.args, { env: job.env, stdio: ["ignore", "pipe", "pipe"] });
+  const child = spawn(job.command, job.args, { env: job.env, stdio: ["ignore", "pipe", "pipe"], detached: true });
   let output = "";
-  const onData = (chunk) => {
-    output = (output + chunk.toString("utf8")).slice(-8e3);
+  const onData = (chunk2) => {
+    output = (output + chunk2.toString("utf8")).slice(-8e3);
     if (!status2.authorizeUrl) {
       const match = AUTHORIZE_URL.exec(output);
       if (match) {
@@ -285,7 +298,7 @@ function startJob(job) {
   child.stderr?.on("data", onData);
   const timer = setTimeout(() => {
     status2.detail = job.kind === "login" ? "Sign-in was not completed within 5 minutes." : "Installation did not finish within 15 minutes.";
-    child.kill("SIGTERM");
+    stopGroup(child);
   }, LIMITS[job.kind]);
   const finish = (state, detail) => {
     if (!current || current.child !== child) return;
@@ -297,9 +310,12 @@ function startJob(job) {
     job.onDone?.(last);
   };
   child.on("error", (error) => finish("failed", error.message));
-  child.on("close", (code) => {
-    const tail = output.replace(/\u001b\[[0-9;]*[A-Za-z]/g, "").trim().split("\n").slice(-4).join("\n");
-    finish(code === 0 ? "succeeded" : "failed", code === 0 ? null : tail || `exited with code ${code}`);
+  child.on("exit", (code) => {
+    setTimeout(() => {
+      signalGroup(child, "SIGKILL");
+      const tail = output.replace(/\u001b\[[0-9;]*[A-Za-z]/g, "").trim().split("\n").slice(-4).join("\n");
+      finish(code === 0 ? "succeeded" : "failed", code === 0 ? null : tail || `exited with code ${code}`);
+    }, 50);
   });
   current = { status: status2, child, timer };
   return { ...status2 };
@@ -307,10 +323,10 @@ function startJob(job) {
 function cancelJob() {
   if (!current) return;
   current.status.detail = "Cancelled.";
-  current.child.kill("SIGTERM");
+  stopGroup(current.child);
 }
 function killJobs() {
-  if (current) current.child.kill("SIGKILL");
+  if (current) signalGroup(current.child, "SIGKILL");
 }
 
 // server/locate.ts
@@ -495,11 +511,11 @@ function runTd(tdPath, args, options) {
     }, timeoutMs);
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
-    child.stdout.on("data", (chunk) => {
-      if (stdout.length < MAX_OUTPUT) stdout += chunk;
+    child.stdout.on("data", (chunk2) => {
+      if (stdout.length < MAX_OUTPUT) stdout += chunk2;
     });
-    child.stderr.on("data", (chunk) => {
-      if (stderr.length < MAX_OUTPUT) stderr += chunk;
+    child.stderr.on("data", (chunk2) => {
+      if (stderr.length < MAX_OUTPUT) stderr += chunk2;
     });
     child.on("error", (error) => {
       const code = error.code;
@@ -534,10 +550,23 @@ function runTd(tdPath, args, options) {
 
 // server/handlers.ts
 var PAGE_LIMIT = 120;
+var FILTER_LIMIT = 1e3;
+var INVOKE_BUDGET_MS = 25e3;
+var invokeScope = new AsyncLocalStorage();
+function withinBudget(fn, budgetMs = INVOKE_BUDGET_MS) {
+  return invokeScope.run({ deadline: Date.now() + budgetMs }, fn);
+}
+function remainingMs() {
+  const scope = invokeScope.getStore();
+  return scope ? scope.deadline - Date.now() : Number.POSITIVE_INFINITY;
+}
+var MIN_ATTEMPT_MS = 1500;
+var MIN_RETRY_MS = 5e3;
 var located = null;
 var tdVersion = null;
 var cachedUser = null;
 var settingPath = "";
+var configGeneration = 0;
 async function resolveTd(refresh = false) {
   if (located && !refresh) return { located, searched: [] };
   const result = await locateTd(settingPath, { refresh });
@@ -547,14 +576,19 @@ async function resolveTd(refresh = false) {
 async function td(args, options = {}) {
   const { located: found } = await resolveTd();
   if (!found) throw new TdError("TD_NOT_FOUND", "The Todoist CLI (td) is not installed or could not be found.");
-  const { read, ...runOptions } = options;
+  const { read, timeoutMs = 2e4, ...runOptions } = options;
+  const attempt = () => {
+    const left = remainingMs();
+    if (left < MIN_ATTEMPT_MS) throw new TdError("TIMEOUT", `td ${args.slice(0, 2).join(" ")} was not started: the request ran out of time.`);
+    return runTd(found.path, args, { env: found.env, ...runOptions, timeoutMs: Math.min(timeoutMs, left) });
+  };
   try {
     try {
-      return await runTd(found.path, args, { env: found.env, ...runOptions });
+      return await attempt();
     } catch (error) {
-      if (read && error instanceof TdError && error.code === "TD_FAILED") {
+      if (read && error instanceof TdError && error.code === "TD_FAILED" && remainingMs() - 400 >= MIN_RETRY_MS) {
         await new Promise((resolve) => setTimeout(resolve, 400));
-        return await runTd(found.path, args, { env: found.env, ...runOptions });
+        return await attempt();
       }
       throw error;
     }
@@ -586,6 +620,8 @@ async function status(params) {
   const nextSetting = typeof p.tdPath === "string" ? p.tdPath : settingPath;
   const refresh = p.refresh === true || nextSetting !== settingPath;
   settingPath = nextSetting;
+  if (refresh) configGeneration++;
+  const generation = configGeneration;
   const job = jobStatus();
   const brew = await locateBrew();
   const base = { brew, job, checkedAt: Date.now() };
@@ -603,7 +639,7 @@ async function status(params) {
     const info = { path: found.path, version: tdVersion.version, node: null };
     try {
       const user = compactUser(await td(["auth", "status", "--json"], { timeoutMs: 15e3 }));
-      cachedUser = user;
+      if (generation === configGeneration) cachedUser = user;
       if (job?.state === "succeeded") clearFinishedJob();
       return toJson({ state: user ? "ready" : "signed-out", td: info, searched, user, error: null, ...base });
     } catch (error) {
@@ -719,7 +755,7 @@ function listArgs(query) {
     case "label":
       return ["task", "list", `--label=${requireString(query.query, "label", 200)}`, ...page];
     case "filter":
-      if (query.id) return ["filter", "view", ref(requireId(query.id, "filter")), ...page];
+      if (query.id) return ["filter", "view", ref(requireId(query.id, "filter")), "--json", "--full", `--limit=${FILTER_LIMIT}`, ...query.cursor ? [`--cursor=${query.cursor}`] : []];
       return ["task", "list", `--filter=${requireString(query.query, "filter", 1e3)}`, ...page];
     case "search":
       return ["task", "list", `--filter=search: ${requireString(query.query, "search", 200).replace(/[,&|]/g, " ")}`, ...page];
@@ -732,20 +768,34 @@ function listArgs(query) {
 async function list(params) {
   const query = asObject(params);
   const raw = await td(listArgs(query), { read: true });
+  if (query.kind === "filter" && query.id) return toJson(filterPage(raw));
+  const { results, nextCursor } = resultsOf(raw);
+  return toJson({ tasks: compactAll(results, (item) => compactTask(item)), nextCursor, truncated: false });
+}
+function filterPage(raw) {
+  const full = (count) => count >= FILTER_LIMIT;
   if (raw && typeof raw === "object" && Array.isArray(raw.sections)) {
+    const sections2 = raw.sections;
     const seen = /* @__PURE__ */ new Set();
     const tasks = [];
-    for (const section of raw.sections) {
+    for (const section of sections2) {
       for (const task2 of compactAll(section.results ?? [], (item) => compactTask(item))) {
         if (seen.has(task2.id)) continue;
         seen.add(task2.id);
         tasks.push(task2);
       }
     }
-    return toJson(pageOf(tasks, null));
+    const truncated = sections2.some((section) => !!section.nextCursor || full(section.results?.length ?? 0));
+    return { tasks, nextCursor: null, truncated };
   }
   const { results, nextCursor } = resultsOf(raw);
-  return toJson(pageOf(compactAll(results, (item) => compactTask(item)), nextCursor));
+  return {
+    tasks: compactAll(results, (item) => compactTask(item)),
+    nextCursor,
+    // Sorted saved filters come back sliced to the limit with no cursor; a
+    // full page without a cursor therefore MAY have more.
+    truncated: !nextCursor && full(results.length)
+  };
 }
 async function task(params) {
   const id = requireId(asObject(params).id);
@@ -897,11 +947,55 @@ var handlers = {
   createLabel
 };
 
+// server/invoke.ts
+var stash = /* @__PURE__ */ new Map();
+var STASH_TTL_MS = 6e4;
+var STASH_MAX = 16;
+function remember(parts) {
+  const id = randomUUID();
+  while (stash.size >= STASH_MAX) {
+    const [oldest] = stash.keys();
+    clearTimeout(stash.get(oldest).timer);
+    stash.delete(oldest);
+  }
+  const timer = setTimeout(() => stash.delete(id), STASH_TTL_MS);
+  timer.unref?.();
+  stash.set(id, { parts, timer });
+  return id;
+}
+function chunk(params) {
+  const p = params ?? {};
+  const entry = typeof p.id === "string" ? stash.get(p.id) : void 0;
+  if (!entry || typeof p.index !== "number" || !Number.isInteger(p.index) || p.index < 1 || p.index >= entry.parts.length) {
+    throw new TdError("BAD_OUTPUT", "Part of a large reply has expired; reload to try again.");
+  }
+  const part = entry.parts[p.index];
+  if (p.index === entry.parts.length - 1) {
+    clearTimeout(entry.timer);
+    stash.delete(p.id);
+  }
+  return { part };
+}
+function encodeReply(value) {
+  const json = toJson(value);
+  if (fitsBridge(json)) return json;
+  const parts = splitParts(JSON.stringify(json));
+  const envelope = { chunked: { id: remember(parts), parts: parts.length }, part: parts[0] };
+  return envelope;
+}
+async function invoke(name, params) {
+  if (name === "chunk") return chunk(params);
+  const handler = handlers[name];
+  if (!handler) throw new TdError("INVALID", `Unknown request ${name}.`);
+  return encodeReply(await withinBudget(() => handler(params)));
+}
+var invokeNames = [...Object.keys(handlers), "chunk"];
+
 // server/service.ts
 runService(defineService({
   start(context) {
-    for (const [name, handler] of Object.entries(handlers)) {
-      context.onRequest(name, (params) => handler(params));
+    for (const name of invokeNames) {
+      context.onRequest(name, (params) => invoke(name, params));
     }
     context.ready();
   },

@@ -1,136 +1,152 @@
-import { u as X, a as Z, r as s, t as ee, j as e, S as te, c as H, C as se, F as ne, P as ae, L as ie, A as ce, I as le, b as oe, D as re, d as de, e as ue, f as pe, i as me, s as he, g as je, h as xe, B as be, k as fe } from "./shared-SetupScreen.js";
-import { t as ke, d as ve } from "./shared-types.js";
-function ge() {
-  const n = X(), d = Z(n), [l, b] = s.useState(null), [w, K] = s.useState({}), [j, R] = s.useState(""), [i, V] = s.useState(null), [f, Q] = s.useState(""), [u, W] = s.useState(1), [k, Y] = s.useState([]), [S, _] = s.useState([]), [P, G] = s.useState(null), [N, p] = s.useState(null), [q, $] = s.useState(!1), [E, L] = s.useState(null), [T, F] = s.useState(null), M = s.useRef(null), m = { project: s.useRef(null), due: s.useRef(null), priority: s.useRef(null), labels: s.useRef(null) }, A = d?.setup?.state === "ready";
-  s.useEffect(() => {
-    n.call("status", {}).catch(() => {
+import { u as Z, a as ee, r as n, t as se, j as e, S as te, c as H, C as ne, F as ae, P as ie, L as ce, A as le, I as oe, b as re, D as de, d as ue, e as pe, f as me, g as he, p as xe, h as je, i as fe, s as be, k as ve, l as ge, B as ke, m as ye } from "./shared-SetupScreen.js";
+import { t as R, d as we } from "./shared-types.js";
+function Ne(t) {
+  return t !== "terminal" && t !== "extension-view";
+}
+function Ie() {
+  const t = Z(), x = ee(t), [r, j] = n.useState(null), [v, K] = n.useState({}), [d, $] = n.useState(""), [h, U] = n.useState(null), [g, V] = n.useState(""), [u, Q] = n.useState(1), [f, W] = n.useState([]), [I, Y] = n.useState([]), [C, _] = n.useState(null), [k, l] = n.useState(null), [S, P] = n.useState(!1), [E, A] = n.useState(null), [F, T] = n.useState(null), L = n.useRef(null), o = { project: n.useRef(null), due: n.useRef(null), priority: n.useRef(null), labels: n.useRef(null) }, q = x?.setup?.state === "ready";
+  n.useEffect(() => {
+    t.call("status", {}).catch(() => {
     });
-  }, [n]), s.useEffect(() => {
-    A && n.call("meta", {}).then(b, () => {
+  }, [t]), n.useEffect(() => {
+    q && t.call("meta", {}).then(j, () => {
     });
-  }, [n, A, d?.revision]), s.useEffect(() => {
-    const t = n.context.api;
-    let o = !0;
-    const h = async () => {
+  }, [t, q, x?.revision]), n.useEffect(() => {
+    const s = t.context.api;
+    let c = !0;
+    const m = async () => {
       try {
-        const [y, I, r] = await Promise.all([t.sessions.observe(), t.workspace.observe(), t.panes.observe()]);
-        if (!o) return;
-        const J = new Set(r.find((a) => a.tabId === I.activeTabId)?.leafSessionIds ?? []), U = y.filter((a) => a.kind && !/terminal|shell|extension/i.test(a.kind)).map((a) => ({ id: a.id, title: a.title || a.kind || "Agent", cwd: a.cwd, kind: a.kind, inActiveTab: J.has(a.id), working: a.activity === "working" })).sort((a, O) => Number(O.inActiveTab) - Number(a.inActiveTab) || a.title.localeCompare(O.title));
-        _(U.slice(0, 12));
+        const [N, a, G] = await Promise.all([s.sessions.observe(), s.workspace.observe(), s.panes.observe()]);
+        if (!c) return;
+        const J = new Set(G.find((i) => i.tabId === a.activeTabId)?.leafSessionIds ?? []), X = N.filter((i) => Ne(i.kind)).map((i) => ({ id: i.id, title: i.title || i.kind || "Agent", cwd: i.cwd, kind: i.kind, inActiveTab: J.has(i.id), working: i.activity === "working" })).sort((i, O) => Number(O.inActiveTab) - Number(i.inActiveTab) || i.title.localeCompare(O.title));
+        Y(X.slice(0, 12));
       } catch {
       }
     };
-    h();
-    let c = () => {
+    m();
+    let w = () => {
     };
     try {
-      c = t.sessions.subscribe(() => void h());
+      w = s.sessions.subscribe(() => void m());
     } catch {
     }
     return () => {
-      o = !1, c();
+      c = !1, w();
     };
-  }, [n]);
-  const v = i?.projectId ?? l?.projects.find((t) => t.isInbox)?.id;
-  s.useEffect(() => {
-    !v || w[v] || n.call("sections", { projectId: v }).then((t) => K((o) => ({ ...o, [v]: t })), () => {
+  }, [t]);
+  const b = h?.projectId ?? r?.projects.find((s) => s.isInbox)?.id;
+  n.useEffect(() => {
+    !b || v[b] || t.call("sections", { projectId: b }).then((s) => K((c) => ({ ...c, [b]: s })), () => {
     });
-  }, [n, v, w]);
-  const x = s.useMemo(() => l ? { ...l, sections: Object.values(w).flat() } : null, [l, w]), g = s.useMemo(() => ee(j), [j]), C = x?.projects.find((t) => t.id === i?.projectId) ?? x?.projects.find((t) => t.isInbox), z = x?.sections.find((t) => t.id === i?.sectionId), D = S.find((t) => t.id === P) ?? null, B = async (t) => {
-    const o = j.trim();
-    if (!(!o || q)) {
-      $(!0), L(null);
-      try {
-        let h = o;
-        f && !g.some((r) => r.kind === "date") && (h += ` ${f}`), u > 1 && !g.some((r) => r.kind === "priority") && (h += ` p${5 - u}`);
-        const c = await n.call("quickAdd", { text: h }), y = k.filter((r) => !c.labels.includes(r)), I = D ? ye(D, c.description) : null;
-        (y.length || I !== null) && await n.call("update", {
-          id: c.id,
-          ...y.length ? { labels: [...c.labels, ...y] } : {},
-          ...I !== null ? { description: I } : {}
-        }), i && !g.some((r) => r.kind === "project") && (c.projectId !== i.projectId || i.sectionId) && await n.call("move", { id: c.id, projectId: i.projectId, ...i.sectionId ? { sectionId: i.sectionId } : {} }), t ? (R(""), F(c.content), setTimeout(() => F(null), 2500), M.current?.focus()) : await n.context.api.ui.close();
-      } catch (h) {
-        L(ke(h));
-      } finally {
-        $(!1);
-      }
+  }, [t, b, v]);
+  const p = n.useMemo(() => r ? { ...r, sections: Object.values(v).flat() } : null, [r, v]), M = n.useMemo(() => se(d), [d]), y = p?.projects.find((s) => s.id === h?.projectId) ?? p?.projects.find((s) => s.isInbox), z = p?.sections.find((s) => s.id === h?.sectionId), D = I.find((s) => s.id === C) ?? null, B = async (s) => {
+    const c = d.trim();
+    if (!c || S) return;
+    P(!0), A(null);
+    let m;
+    try {
+      m = await t.call("quickAdd", { text: c });
+    } catch (a) {
+      A(R(a)), P(!1);
+      return;
+    }
+    const w = r?.projects.find((a) => a.isInbox)?.id ?? null, N = () => {
+      $(""), T(m.content), setTimeout(() => T(null), 2500), L.current?.focus();
+    };
+    try {
+      await he(m, xe(m, {
+        due: g || null,
+        priority: u,
+        labels: f,
+        projectId: h?.projectId ?? null,
+        sectionId: h?.sectionId ?? null,
+        inboxId: w,
+        note: D ? Ce(D) : null
+      }), {
+        update: (a) => t.call("update", a),
+        move: (a) => t.call("move", a)
+      }), s ? N() : await t.context.api.ui.close();
+    } catch (a) {
+      N(), A(a instanceof je ? `${a.message} ${R(a.cause)}` : R(a));
+    } finally {
+      P(!1);
     }
   };
-  return A ? /* @__PURE__ */ e.jsxs("div", { className: "td-root td-modal-root", children: [
+  return q ? /* @__PURE__ */ e.jsxs("div", { className: "td-root td-modal-root", children: [
     /* @__PURE__ */ e.jsxs("div", { className: "td-qa", children: [
       /* @__PURE__ */ e.jsxs("div", { className: "td-qa-field", children: [
         /* @__PURE__ */ e.jsxs("div", { className: "td-qa-mirror", "aria-hidden": "true", children: [
-          g.map((t, o) => /* @__PURE__ */ e.jsx("span", { className: `tok-${t.kind}`, children: t.text }, o)),
+          M.map((s, c) => /* @__PURE__ */ e.jsx("span", { className: `tok-${s.kind}`, children: s.text }, c)),
           "​"
         ] }),
         /* @__PURE__ */ e.jsx(
           "textarea",
           {
-            ref: M,
+            ref: L,
             autoFocus: !0,
             rows: 1,
-            value: j,
+            value: d,
             spellCheck: !1,
             placeholder: 'Task name — try "Review PR tomorrow 3pm p1 #Work @review"',
-            onChange: (t) => R(t.target.value.replace(/\n/g, " ")),
-            onKeyDown: (t) => {
-              t.key === "Enter" && !t.nativeEvent.isComposing && (t.preventDefault(), B(t.shiftKey));
+            onChange: (s) => $(s.target.value.replace(/\n/g, " ")),
+            onKeyDown: (s) => {
+              s.key === "Enter" && !s.nativeEvent.isComposing && (s.preventDefault(), B(s.shiftKey));
             }
           }
         )
       ] }),
-      g.some((t) => t.kind !== "text") && H(j) && /* @__PURE__ */ e.jsxs("div", { className: "td-qa-preview", children: [
+      M.some((s) => s.kind !== "text") && H(d) && /* @__PURE__ */ e.jsxs("div", { className: "td-qa-preview", children: [
         "Adds “",
-        /* @__PURE__ */ e.jsx("b", { children: H(j) }),
+        /* @__PURE__ */ e.jsx("b", { children: H(d) }),
         "”"
       ] }),
       /* @__PURE__ */ e.jsxs("div", { className: "td-qa-chips", children: [
-        /* @__PURE__ */ e.jsxs("button", { ref: m.due, className: `td-qa-chip${f ? " is-set" : ""}`, onClick: () => p("due"), children: [
-          /* @__PURE__ */ e.jsx(se, { size: 13 }),
-          f || "Date"
+        /* @__PURE__ */ e.jsxs("button", { ref: o.due, className: `td-qa-chip${g ? " is-set" : ""}`, onClick: () => l("due"), children: [
+          /* @__PURE__ */ e.jsx(ne, { size: 13 }),
+          g || "Date"
         ] }),
-        /* @__PURE__ */ e.jsxs("button", { ref: m.priority, className: `td-qa-chip${u > 1 ? " is-set" : ""}`, onClick: () => p("priority"), children: [
-          /* @__PURE__ */ e.jsx(ne, { size: 13, color: u === 1 ? "var(--td-muted)" : ae[u] }),
+        /* @__PURE__ */ e.jsxs("button", { ref: o.priority, className: `td-qa-chip${u > 1 ? " is-set" : ""}`, onClick: () => l("priority"), children: [
+          /* @__PURE__ */ e.jsx(ae, { size: 13, color: u === 1 ? "var(--td-muted)" : ie[u] }),
           u > 1 ? `P${5 - u}` : "Priority"
         ] }),
-        /* @__PURE__ */ e.jsxs("button", { ref: m.labels, className: `td-qa-chip${k.length ? " is-set" : ""}`, onClick: () => p("labels"), children: [
-          /* @__PURE__ */ e.jsx(ie, { size: 13 }),
-          k.length ? k.join(", ") : "Labels"
+        /* @__PURE__ */ e.jsxs("button", { ref: o.labels, className: `td-qa-chip${f.length ? " is-set" : ""}`, onClick: () => l("labels"), children: [
+          /* @__PURE__ */ e.jsx(ce, { size: 13 }),
+          f.length ? f.join(", ") : "Labels"
         ] })
       ] }),
-      S.length > 0 && /* @__PURE__ */ e.jsxs("div", { className: "td-qa-agents", children: [
+      I.length > 0 && /* @__PURE__ */ e.jsxs("div", { className: "td-qa-agents", children: [
         /* @__PURE__ */ e.jsxs("span", { className: "td-qa-agents-label", children: [
-          /* @__PURE__ */ e.jsx(ce, { size: 13 }),
+          /* @__PURE__ */ e.jsx(le, { size: 13 }),
           " Link to agent"
         ] }),
-        /* @__PURE__ */ e.jsx("div", { className: "td-qa-agent-list", children: S.map((t) => /* @__PURE__ */ e.jsxs(
+        /* @__PURE__ */ e.jsx("div", { className: "td-qa-agent-list", children: I.map((s) => /* @__PURE__ */ e.jsxs(
           "button",
           {
-            className: `td-agent-chip${P === t.id ? " is-on" : ""}`,
-            title: t.cwd,
-            onClick: () => G(P === t.id ? null : t.id),
+            className: `td-agent-chip${C === s.id ? " is-on" : ""}`,
+            title: s.cwd,
+            onClick: () => _(C === s.id ? null : s.id),
             children: [
-              /* @__PURE__ */ e.jsx("span", { className: `td-agent-dot${t.working ? " is-working" : ""}` }),
-              t.title,
-              t.inActiveTab && /* @__PURE__ */ e.jsx("span", { className: "td-dim", children: " · this tab" })
+              /* @__PURE__ */ e.jsx("span", { className: `td-agent-dot${s.working ? " is-working" : ""}` }),
+              s.title,
+              s.inActiveTab && /* @__PURE__ */ e.jsx("span", { className: "td-dim", children: " · this tab" })
             ]
           },
-          t.id
+          s.id
         )) })
       ] }),
       E && /* @__PURE__ */ e.jsx("div", { className: "td-warn", children: E }),
       /* @__PURE__ */ e.jsxs("div", { className: "td-qa-foot", children: [
-        /* @__PURE__ */ e.jsxs("button", { ref: m.project, className: "td-qa-project", onClick: () => p("project"), children: [
-          C?.isInbox || !C ? /* @__PURE__ */ e.jsx(le, { size: 14 }) : /* @__PURE__ */ e.jsx("span", { className: "td-dot", style: { background: oe(C.color) } }),
-          C?.name ?? "Inbox",
+        /* @__PURE__ */ e.jsxs("button", { ref: o.project, className: "td-qa-project", onClick: () => l("project"), children: [
+          y?.isInbox || !y ? /* @__PURE__ */ e.jsx(oe, { size: 14 }) : /* @__PURE__ */ e.jsx("span", { className: "td-dot", style: { background: re(y.color) } }),
+          y?.name ?? "Inbox",
           z ? /* @__PURE__ */ e.jsxs("span", { className: "td-dim", children: [
             " / ",
             z.name
           ] }) : null
         ] }),
-        /* @__PURE__ */ e.jsx("span", { className: "td-qa-hint", children: T ? /* @__PURE__ */ e.jsxs(e.Fragment, { children: [
+        /* @__PURE__ */ e.jsx("span", { className: "td-qa-hint", children: F ? /* @__PURE__ */ e.jsxs(e.Fragment, { children: [
           "Added “",
-          T,
+          F,
           "”"
         ] }) : /* @__PURE__ */ e.jsxs(e.Fragment, { children: [
           /* @__PURE__ */ e.jsx("kbd", { children: "↵" }),
@@ -138,50 +154,47 @@ function ge() {
           /* @__PURE__ */ e.jsx("kbd", { children: "⇧↵" }),
           " add another"
         ] }) }),
-        /* @__PURE__ */ e.jsx("button", { className: "td-btn td-btn-ghost", onClick: () => void n.context.api.ui.close(), children: "Cancel" }),
-        /* @__PURE__ */ e.jsxs("button", { className: "td-btn td-btn-primary", disabled: !j.trim() || q, onClick: () => void B(!1), children: [
-          q ? /* @__PURE__ */ e.jsx("span", { className: "td-spinner" }) : null,
+        /* @__PURE__ */ e.jsx("button", { className: "td-btn td-btn-ghost", onClick: () => void t.context.api.ui.close(), children: "Cancel" }),
+        /* @__PURE__ */ e.jsxs("button", { className: "td-btn td-btn-primary", disabled: !d.trim() || S, onClick: () => void B(!1), children: [
+          S ? /* @__PURE__ */ e.jsx("span", { className: "td-spinner" }) : null,
           " Add task"
         ] })
       ] })
     ] }),
-    N === "due" && /* @__PURE__ */ e.jsx(re, { anchor: m.due.current, current: f, onPick: Q, onClose: () => p(null) }),
-    N === "priority" && /* @__PURE__ */ e.jsx(de, { anchor: m.priority.current, current: u, onPick: W, onClose: () => p(null) }),
-    N === "labels" && x && /* @__PURE__ */ e.jsx(
-      ue,
+    k === "due" && /* @__PURE__ */ e.jsx(de, { anchor: o.due.current, current: g, onPick: V, onClose: () => l(null) }),
+    k === "priority" && /* @__PURE__ */ e.jsx(ue, { anchor: o.priority.current, current: u, onPick: Q, onClose: () => l(null) }),
+    k === "labels" && p && /* @__PURE__ */ e.jsx(
+      pe,
       {
-        anchor: m.labels.current,
-        labels: x.labels,
-        selected: k,
-        onChange: Y,
-        onCreate: async (t) => {
-          await n.call("createLabel", { name: t }), b(await n.call("meta", {}));
+        anchor: o.labels.current,
+        labels: p.labels,
+        selected: f,
+        onChange: W,
+        onCreate: async (s) => {
+          await t.call("createLabel", { name: s }), j(await t.call("meta", {}));
         },
-        onClose: () => p(null)
+        onClose: () => l(null)
       }
     ),
-    N === "project" && x && /* @__PURE__ */ e.jsx(pe, { anchor: m.project.current, meta: x, current: i ?? void 0, onPick: V, onClose: () => p(null) })
-  ] }) : /* @__PURE__ */ e.jsx("div", { className: "td-root td-modal-root", children: /* @__PURE__ */ e.jsx(te, { setup: d?.setup ?? null, onRetry: async () => {
-    await n.call("status", { refresh: !0 });
+    k === "project" && p && /* @__PURE__ */ e.jsx(me, { anchor: o.project.current, meta: p, current: h ?? void 0, onPick: U, onClose: () => l(null) })
+  ] }) : /* @__PURE__ */ e.jsx("div", { className: "td-root td-modal-root", children: /* @__PURE__ */ e.jsx(te, { setup: x?.setup ?? null, onRetry: async () => {
+    await t.call("status", { refresh: !0 });
   } }) });
 }
-function ye(n, d) {
-  const l = `From agent: **${n.title}** — \`${n.cwd}\``;
-  return d ? `${d}
-
-${l}` : l;
+function Ce(t) {
+  return `From agent: **${t.title}** — \`${t.cwd}\``;
 }
-const Ne = ve({
-  mount(n, d) {
-    me(he);
-    const l = je(), b = xe(n);
-    return b.render(
-      /* @__PURE__ */ e.jsx(be.Provider, { value: fe(d), children: /* @__PURE__ */ e.jsx(ge, {}) })
+const Ae = we({
+  mount(t, x) {
+    fe(be);
+    const r = ve(), j = ge(t);
+    return j.render(
+      /* @__PURE__ */ e.jsx(ke.Provider, { value: ye(x), children: /* @__PURE__ */ e.jsx(Ie, {}) })
     ), () => {
-      l(), queueMicrotask(() => b.unmount());
+      r(), queueMicrotask(() => j.unmount());
     };
   }
 });
 export {
-  Ne as default
+  Ae as default
 };
