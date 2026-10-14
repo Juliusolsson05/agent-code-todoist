@@ -83,6 +83,8 @@ export type UserRow = { id: string; email: string; fullName: string; readOnly: b
 
 export type Meta = {
   projects: ProjectRow[]
+  /** Always empty from the service (td cannot list sections account-wide);
+   *  views merge in per-project results from the `sections` call. */
   sections: SectionRow[]
   labels: LabelRow[]
   filters: FilterRow[]

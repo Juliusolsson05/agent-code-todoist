@@ -140,6 +140,7 @@ export function createFakeContext(setupState: string, modal: boolean): ViewConte
     switch (name) {
       case 'status': publish(); return state.setup as unknown as JsonValue
       case 'meta': return meta as unknown as JsonValue
+      case 'sections': return meta.sections.filter(sec => sec.projectId === (p as unknown as { projectId: string }).projectId) as unknown as JsonValue
       case 'list': return { tasks: list(p as unknown as ListQuery), nextCursor: null, truncated: false } as unknown as JsonValue
       case 'task': {
         const t = find(p.id)!

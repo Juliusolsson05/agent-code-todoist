@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { colorHex, PRIORITY_COLORS } from '../shared/colors'
 import { contentPreview, tokenize } from '../shared/quickAddTokens'
-import type { AgentLink, ApiPriority, Meta } from '../shared/types'
+import type { AgentLink, ApiPriority, Meta, SectionRow } from '../shared/types'
 import { tdErrorMessage } from '../shared/types'
 import { useBridge, useHostState } from './bridge'
 import { AgentIcon, CalendarIcon, FlagFilledIcon, InboxIcon, LabelIcon } from './Icons'
@@ -24,7 +24,8 @@ import { SetupScreen } from './SetupScreen'
 export function QuickAddModal() {
   const bridge = useBridge()
   const host = useHostState(bridge)
-  const [meta, setMeta] = useState<Meta | null>(null)
+  const [baseMeta, setMeta] = useState<Meta | null>(null)
+  const [sectionCache, setSectionCache] = useState<Record<string, SectionRow[]>>({})
   const [text, setText] = useState('')
   const [target, setTarget] = useState<ProjectTarget | null>(null)
   const [due, setDue] = useState('')
@@ -70,6 +71,16 @@ export function QuickAddModal() {
     try { unsubscribe = api.sessions.subscribe(() => void read()) } catch { /* no permission */ }
     return () => { alive = false; unsubscribe() }
   }, [bridge])
+
+  // Sections load per project (see server/handlers.ts meta): the Inbox's on
+  // open, and whichever project the user picks so a second pick can choose a
+  // section inside it.
+  const sectionsFor = target?.projectId ?? baseMeta?.projects.find(p => p.isInbox)?.id
+  useEffect(() => {
+    if (!sectionsFor || sectionCache[sectionsFor]) return
+    bridge.call('sections', { projectId: sectionsFor }).then(list => setSectionCache(c => ({ ...c, [sectionsFor]: list })), () => {})
+  }, [bridge, sectionsFor, sectionCache])
+  const meta = useMemo<Meta | null>(() => (baseMeta ? { ...baseMeta, sections: Object.values(sectionCache).flat() } : null), [baseMeta, sectionCache])
 
   const tokens = useMemo(() => tokenize(text), [text])
   const project = meta?.projects.find(p => p.id === target?.projectId) ?? meta?.projects.find(p => p.isInbox)

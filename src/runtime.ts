@@ -20,7 +20,7 @@ import { tdErrorCode } from './shared/types'
 const SERVICE = 'todoist.td'
 const VIEWS = ['todoist.main', 'todoist.quickAdd'] as const
 
-const READS = new Set(['status', 'meta', 'list', 'task'])
+const READS = new Set(['status', 'meta', 'sections', 'list', 'task'])
 const MUTATIONS = new Set([
   'quickAdd', 'add', 'update', 'move', 'complete', 'uncomplete', 'delete', 'comment',
   'createProject', 'createSection', 'createLabel', 'logout',
@@ -130,9 +130,10 @@ export default defineRuntime({
             revision++
             await publish()
           }
-          // Signed out or td gone mid-session: re-check so every view swaps to
-          // the setup screen instead of each showing its own error.
-          if (code === 'NO_TOKEN' || code === 'TD_NOT_FOUND') void refreshSetup(true).catch(() => {})
+          // Signed out, token revoked (AUTH: a 401 from Todoist, e.g. the user
+          // revoked access on the web) or td gone mid-session: re-check so every
+          // view swaps to the setup screen instead of each toasting "HTTP 401".
+          if (code === 'NO_TOKEN' || code === 'AUTH' || code === 'TD_NOT_FOUND') void refreshSetup(true).catch(() => {})
           throw error
         }
       })

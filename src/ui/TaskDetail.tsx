@@ -22,7 +22,7 @@ import { DuePicker, LabelPicker, PriorityPicker, ProjectPicker } from './pickers
 
 const DURATIONS = ['15m', '30m', '45m', '1h', '1h30m', '2h', '3h', '4h']
 
-export function TaskDetailPanel({ taskId, meta, now, onClose, onToggle, onOpenTask, onChanged, onError, onOpenUrl, onCreateLabel }: {
+export function TaskDetailPanel({ taskId, meta, now, onClose, onToggle, onOpenTask, onChanged, onError, onOpenUrl, onCreateLabel, onNeedSections }: {
   taskId: string
   meta: Meta
   now: Date
@@ -33,6 +33,8 @@ export function TaskDetailPanel({ taskId, meta, now, onClose, onToggle, onOpenTa
   onError: (message: string) => void
   onOpenUrl: (url: string) => void
   onCreateLabel: (name: string) => Promise<void>
+  /** Load a project's sections into the shared cache (breadcrumb + picker). */
+  onNeedSections: (projectId: string) => void
 }) {
   const bridge = useBridge()
   const [detail, setDetail] = useState<Detail | null>(null)
@@ -89,6 +91,11 @@ export function TaskDetailPanel({ taskId, meta, now, onClose, onToggle, onOpenTa
       onError(tdErrorMessage(error))
     }
   }
+
+  const projectOfTask = detail?.task.projectId
+  useEffect(() => {
+    if (projectOfTask) onNeedSections(projectOfTask)
+  }, [projectOfTask, onNeedSections])
 
   if (loadError) {
     return (

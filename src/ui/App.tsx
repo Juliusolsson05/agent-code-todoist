@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { colorHex } from '../shared/colors'
 import { groupByDay, groupCompleted, groupToday, type TaskGroup } from '../shared/dates'
 import { tokenize } from '../shared/quickAddTokens'
-import type { ApiPriority, ListQuery, Meta, TaskRow } from '../shared/types'
+import type { ApiPriority, ListQuery, Meta, SectionRow, TaskRow } from '../shared/types'
 import { tdErrorCode, tdErrorMessage } from '../shared/types'
 import { useBridge, useHostState, useNow, usePersistent } from './bridge'
 import { CloseIcon, ExternalIcon, InboxIcon, KeyboardIcon, PlusIcon, RefreshIcon, SearchIcon, SidebarIcon } from './Icons'
@@ -53,7 +53,11 @@ function Workspace({ revision, defaultView, now, user }: { revision: number; def
   const bridge = useBridge()
   const [view, setView, viewLoaded] = usePersistent<ListQuery>(bridge, 'todoist.ui.view', { kind: defaultView })
   const [sidebarPref, setSidebarPref] = usePersistent<boolean>(bridge, 'todoist.ui.sidebar', true)
-  const [meta, setMeta] = useState<Meta | null>(null)
+  const [baseMeta, setMeta] = useState<Meta | null>(null)
+  // Sections arrive per project (td cannot list them account-wide; see
+  // server/handlers.ts meta). Cached by project and merged into one Meta so
+  // every consumer — grouping, row chips, pickers, drawer — reads one shape.
+  const [sectionCache, setSectionCache] = useState<Record<string, SectionRow[]>>({})
   const [tasks, setTasks] = useState<TaskRow[]>([])
   const [cursor, setCursor] = useState<string | null>(null)
   const [truncated, setTruncated] = useState(false)
@@ -96,7 +100,7 @@ function Workspace({ revision, defaultView, now, user }: { revision: number; def
     // Sign-out / td removal are handled by the runtime re-checking setup (the
     // whole pane swaps to the setup screen); a toast would just flash first.
     const code = tdErrorCode(error)
-    if (code === 'NO_TOKEN' || code === 'TD_NOT_FOUND') return
+    if (code === 'NO_TOKEN' || code === 'AUTH' || code === 'TD_NOT_FOUND') return
     toast(tdErrorMessage(error), { tone: 'error' })
   }, [toast])
 
@@ -108,6 +112,18 @@ function Workspace({ revision, defaultView, now, user }: { revision: number; def
     bridge.call('meta', {}).then(m => { if (alive) setMeta(m) }, fail)
     return () => { alive = false }
   }, [bridge, revision, fail])
+
+  const ensureSections = useCallback((projectId: string) => {
+    void bridge.call('sections', { projectId }).then(
+      list => setSectionCache(cache => ({ ...cache, [projectId]: list })),
+      () => {},
+    )
+  }, [bridge])
+
+  const meta = useMemo<Meta | null>(
+    () => (baseMeta ? { ...baseMeta, sections: Object.values(sectionCache).flat() } : null),
+    [baseMeta, sectionCache],
+  )
 
   const load = useCallback(async (query: ListQuery, append = false, from: string | null = null) => {
     const seq = ++requestSeq.current
@@ -160,6 +176,10 @@ function Workspace({ revision, defaultView, now, user }: { revision: number; def
   const inboxProject = meta?.projects.find(p => p.isInbox)
   const currentProjectId = view.kind === 'project' ? view.id : view.kind === 'inbox' ? inboxProject?.id : undefined
   const currentProject = currentProjectId ? lookup.project(currentProjectId) : undefined
+
+  useEffect(() => {
+    if (currentProjectId) ensureSections(currentProjectId)
+  }, [currentProjectId, revision, ensureSections])
 
   // ---- grouping ---------------------------------------------------------
   const { groups, depths, childCounts } = useMemo(() => buildGroups(view, tasks, now, meta, currentProjectId), [view, tasks, now, meta, currentProjectId])
@@ -474,6 +494,7 @@ function Workspace({ revision, defaultView, now, user }: { revision: number; def
               onError={message => toast(message, { tone: 'error' })}
               onOpenUrl={openUrl}
               onCreateLabel={createLabel}
+              onNeedSections={ensureSections}
             />
           </>
         )}

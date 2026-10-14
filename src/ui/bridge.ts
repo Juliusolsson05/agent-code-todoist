@@ -33,6 +33,7 @@ type Calls = {
   logout: [Record<string, never>, SetupStatus]
   openUrl: [{ url: string }, { ok: true }]
   meta: [Record<string, never>, Meta]
+  sections: [{ projectId: string }, SectionRow[]]
   list: [ListQuery, TaskPage]
   task: [{ id: string }, TaskDetail]
   quickAdd: [{ text: string }, TaskRow]

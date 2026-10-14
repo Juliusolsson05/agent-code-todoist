@@ -59,11 +59,26 @@ async function resolveTd(refresh = false): Promise<{ located: Located | null; se
   return { located, searched: result.searched }
 }
 
-async function td(args: string[], options: { timeoutMs?: number; expectJson?: boolean; stdin?: string } = {}): Promise<unknown> {
+async function td(args: string[], options: { timeoutMs?: number; expectJson?: boolean; stdin?: string; read?: boolean } = {}): Promise<unknown> {
   const { located: found } = await resolveTd()
   if (!found) throw new TdError('TD_NOT_FOUND', 'The Todoist CLI (td) is not installed or could not be found.')
+  const { read, ...runOptions } = options
   try {
-    return await runTd(found.path, args, { env: found.env, ...options })
+    try {
+      return await runTd(found.path, args, { env: found.env, ...runOptions })
+    } catch (error) {
+      // td 5.4.10 does NOT retry a transient server error (verified by the
+      // integration suite: one 503 on /projects failed `project list`, and with
+      // it the whole sidebar). Reads are idempotent, so retry them once after a
+      // short pause. Never writes: a failed write may still have landed, and
+      // replaying it could duplicate a task — the same rule the host applies.
+      // Never TIMEOUT either: that already spent most of the invoke budget.
+      if (read && error instanceof TdError && error.code === 'TD_FAILED') {
+        await new Promise(resolve => setTimeout(resolve, 400))
+        return await runTd(found.path, args, { env: found.env, ...runOptions })
+      }
+      throw error
+    }
   } catch (error) {
     // A td that vanished (uninstalled, brew upgrade moved it) — forget the cached
     // location so the next status re-runs the ladder instead of failing forever.
@@ -216,21 +231,39 @@ export async function openUrl(params: unknown): Promise<{ ok: true }> {
 // Reads
 
 export async function meta(): Promise<Meta> {
-  const [projects, sections, labels, filters] = await Promise.all([
-    td(['project', 'list', '--all', '--json', '--full']),
-    td(['section', 'list', '--all', '--json', '--full']).catch(() => ({ results: [] })),
-    td(['label', 'list', '--all', '--json', '--full']).catch(() => ({ results: [] })),
+  // Sections are NOT fetched here: `td section list` refuses to run without a
+  // project or a search term (td 5.4.10 section/index.js), so an account-wide
+  // list would cost one td process per project. An earlier version called it
+  // without a project, the CLI exited with usage, and a `.catch` turned that
+  // into "no sections" for every user — found by the real-td integration
+  // tests. Views load sections per project through `sections` instead.
+  const [projects, labels, filters] = await Promise.all([
+    td(['project', 'list', '--all', '--json', '--full'], { read: true }),
+    td(['label', 'list', '--all', '--json', '--full'], { read: true }).catch(() => ({ results: [] })),
     // Saved filters are a Pro feature; a free account must still get a sidebar.
-    td(['filter', 'list', '--json', '--full']).catch(() => ({ results: [] })),
+    td(['filter', 'list', '--json', '--full'], { read: true }).catch(() => ({ results: [] })),
   ])
   const projectRows = compactAll(resultsOf(projects).results, compactProject).sort((a, b) => Number(b.isInbox) - Number(a.isInbox) || a.order - b.order)
   return toJson({
     projects: projectRows,
-    sections: compactAll(resultsOf(sections).results, compactSection).sort((a, b) => a.order - b.order),
+    sections: [],
     labels: compactAll(resultsOf(labels).results, compactLabel).sort((a, b) => a.order - b.order || a.name.localeCompare(b.name)),
     filters: compactAll(resultsOf(filters).results, compactFilter),
     user: cachedUser,
   })
+}
+
+export async function sections(params: unknown) {
+  const projectId = requireId(asObject(params).projectId, 'project')
+  const raw = await td(['section', 'list', ref(projectId), '--all', '--json', '--full'], { read: true })
+  return toJson(compactAll(resultsOf(raw).results, compactSection).sort((a, b) => a.order - b.order))
+}
+
+/** Local calendar day `offset` days from now, as td's --since expects. */
+function localDay(offset: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() + offset)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 function listArgs(query: ListQuery): string[] {
@@ -255,7 +288,10 @@ function listArgs(query: ListQuery): string[] {
       // queries in filter syntax, so strip them from free text.
       return ['task', 'list', `--filter=search: ${requireString(query.query, 'search', 200).replace(/[,&|]/g, ' ')}`, ...page]
     case 'completed':
-      return ['completed', 'list', ...page]
+      // td's default window is TODAY only (since=today, until=tomorrow — seen
+      // in the integration request log). Two weeks matches what people mean by
+      // "what did I finish lately" without paging through months.
+      return ['completed', 'list', `--since=${localDay(-14)}`, ...page]
     default:
       throw new TdError('INVALID', 'Unknown list.')
   }
@@ -263,7 +299,7 @@ function listArgs(query: ListQuery): string[] {
 
 export async function list(params: unknown): Promise<TaskPage> {
   const query = asObject(params) as ListQuery
-  const raw = await td(listArgs(query))
+  const raw = await td(listArgs(query), { read: true })
   // `filter view` returns {sections:[{query, results, nextCursor}]} for saved
   // filters with several comma-separated queries; flatten them (de-duplicated —
   // a task can match two sections) and drop pagination, which is per section.
@@ -286,8 +322,8 @@ export async function list(params: unknown): Promise<TaskPage> {
 export async function task(params: unknown): Promise<TaskDetail> {
   const id = requireId(asObject(params).id)
   const [raw, comments] = await Promise.all([
-    td(['task', 'view', ref(id), '--json', '--full', '--include-children']),
-    td(['comment', 'list', ref(id), '--json', '--full', '--limit=50']).catch(() => ({ results: [] })),
+    td(['task', 'view', ref(id), '--json', '--full', '--include-children'], { read: true }),
+    td(['comment', 'list', ref(id), '--json', '--full', '--limit=50'], { read: true }).catch(() => ({ results: [] })),
   ])
   const row = compactTask(raw, DETAIL_DESCRIPTION_CHARS)
   if (!row) throw new TdError('BAD_OUTPUT', 'td returned no task.')
@@ -439,6 +475,7 @@ export const handlers = {
   logout,
   openUrl,
   meta,
+  sections,
   list,
   task,
   quickAdd,
