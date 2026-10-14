@@ -1,7 +1,8 @@
 # Todoist inside Agent Code
 
 **Status:** in progress · **Size:** long plan (new repo, native service, full UI) · **Mode:** full build
-**Repo:** `Juliusolsson05/agent-code-todoist` (local: `~/Desktop/Development/agent-code-todoist`)
+**Repo:** `Juliusolsson05/agent-code-todoist` (private until the owner decides; local: `~/Desktop/Development/agent-code-todoist`,
+worktree `.worktrees/todoist-in-agent-code`, branch `feat/todoist-in-agent-code`) · **Issue:** #1
 **Host:** Agent Code as shipped on 2026-10-14 (`d0c3df99`), extension SDK `v0.11.0`. **No host changes.**
 
 ## Outcome
@@ -108,7 +109,7 @@ answered — see **Verification boundary**.
                               • reads settings from storage         • compacts entities to Row types
                                                                     • login / brew install as detached
                                                                       jobs, polled via `status`
-                                                                    • openUrl (todoist.com only)
+                                                                    • openUrl (http/https only)  
 ```
 
 Why the runtime sits in the middle instead of views invoking the service directly: two views (panel and
@@ -148,7 +149,7 @@ map them (`NO_TOKEN` → setup screen, `TD_NOT_FOUND`, `TIMEOUT`, `TD_FAILED`).
 | `createProject` | `{ name, color?, parentId?, favorite? }` | `ProjectRow` |
 | `createSection` | `{ projectId, name }` | `SectionRow` |
 | `createLabel` | `{ name, color? }` | `LabelRow` |
-| `openUrl` | `{ url }` | `{ ok: true }` (only `https://app.todoist.com/` and `https://todoist.com/`) |
+| `openUrl` | `{ url }` | `{ ok: true }` (http/https only) |
 
 `ListQuery` = `{ kind: 'today'|'upcoming'|'inbox'|'project'|'label'|'filter'|'search'|'completed', id?, query?, cursor? }`.
 
@@ -188,7 +189,7 @@ View requests: every service RPC name above (`runtime.request(name, input)`), pl
 1. **Scaffold** — `package.json`, `tsconfig.json`, `vite.config.ts` (SDK preset, two view entries + runtime),
    esbuild service build, `.gitignore` (dist committed), manifest. Hands to 2: `ExtensionManifest` JSON.
 2. **Shared model** (`src/shared/`) — `types.ts` (Row types, SetupStatus, ListQuery, HostState),
-   `budget.ts` (`countJsonValues`, `fitTaskPage`), `colors.ts`, `dates.ts` (group/format due dates against a
+   `budget.ts` (`countJsonValues`, `fitTasks`, `pageOf`, `toJson`), `colors.ts`, `dates.ts` (group/format due dates against a
    supplied `now`), `quickAddTokens.ts` (highlight spans).
 3. **Service** (`server/`) — `locate.ts` (`locateTd(settingPath)`), `run.ts` (`runTd(args, opts)` →
    parsed JSON or `TdError`), `compact.ts` (SDK entity → Row), `jobs.ts` (login / install), `handlers.ts`
@@ -201,23 +202,25 @@ View requests: every service RPC name above (`runtime.request(name, input)`), pl
 
 ## Tests
 
-- `compact.test.mjs` — fixtures are the SDK's own `test-defaults` entities parsed through the SDK's
-  `TaskSchema`/project/section/label/comment schemas and serialised exactly like `td --json --full`
-  (`JSON.stringify`, Date → ISO). Fails before `compact.ts` exists / when a field is mis-mapped (e.g.
-  priority inverted, due datetime dropped).
-- `run.test.mjs` — drives `runTd` against a fake `td` script that replays the **recorded** signed-out stderr
-  envelope (`tests/fixtures/td-signed-out-today.json`) with exit 1 and asserts `NO_TOKEN` mapping; plus a
-  hang script asserting the 20 s cap becomes `TIMEOUT` (cap injected small).
-- `budget.test.mjs` — a 600-task page built from the SDK default task trims to the host bound and keeps
-  `nextCursor`; the bound constants are asserted equal to the host's (4096 / 128 Ki) minus headroom.
-- `dates.test.mjs`, `quickAddTokens.test.mjs` — grouping (overdue / today / tomorrow / weekday) and token
-  spans with fixed `now`.
-- `extension-contract.test.mjs` — manifest ↔ built files ↔ command/view/activation consistency (Skitgubbe
-  pattern) and the built service answering `status` over the real SDK `runService` wire with a fake
-  `parentPort` and a fake `td` on PATH.
-- Dev preview (`dev/`): the real view modules mounted against a fake runtime fed by the same fixtures, captured
-  with Playwright screenshots in light and dark tokens for the UI review. This is a standalone browser page,
-  not Agent Code.
+Runner: `dev/test.mjs` bundles each `*.test.mjs` with esbuild (packages external) and runs `node --test` — the
+Skitgubbe pattern. Fixture provenance: `tests/sdk.mjs` builds td's `--json --full` output from
+`@doist/todoist-sdk` 15.3.1's own test defaults run through its own zod schemas; the signed-out stderr envelope
+is the recorded file `tests/fixtures/td-5.4.10-signed-out-today.stderr`.
+
+- `tests/compact.test.mjs` — every field the UI reads, against SDK entities; due timestamp split; priority stays
+  API-numbered; nulls never undefined; degraded input; description clipping; project/section/label/comment.
+- `tests/run.test.mjs` — `runTd` against fake td executables: recorded NO_TOKEN envelope, JSON success, hostile
+  argv survives as one element, stdin quick add, TIMEOUT kill, missing binary, missing Node (exit 127),
+  non-JSON stdout.
+- `tests/handlers.test.mjs` — the exact argv the handlers build (`--flag=value`, `id:` refs, p1 mapping, label
+  comma, `--no-*` clears), id validation, oversized page trimmed with cursor withheld, openUrl scheme refusal.
+- `tests/model.test.mjs` — budget constants equal the host's, a 300-task page exceeds the bridge and `pageOf`
+  fits it, `toJson`, local-day semantics, Today/Upcoming grouping order, quick-add token kinds and boundaries.
+- `testing/extension-contract.test.mjs` (`npm run test:extension`, builds first) — manifest namespacing and view
+  reachability, exact permission list, committed entries export their contracts with no `jsxDEV`, and the
+  built service answers `status`/rejects bad input over the real SDK `runService` wire.
+- Dev preview (`npm run preview`, `npm run shots`): the real view modules against `dev/fakeHost.ts` with Agent
+  Code's Nord and Light token values; screenshots reviewed for every state.
 
 ## Verification
 
@@ -246,11 +249,27 @@ View requests: every service RPC name above (`runtime.request(name, input)`), pl
 - Ruling: always pass `id:<id>` refs to `td` — names fuzzy-match and could edit the wrong task — cost if wrong: none.
 - Ruling: lists use `--full` and compact service-side — essential projection lacks `childOrder`, `noteCount`,
   `completedAt` the UI needs — cost: bigger stdout inside the service only.
-- Ruling: Quick Add chord `cmd+alt+t` — **UNCONFIRMED**; the host silently drops it if first-party owns it.
+- Ruling: Quick Add chord `cmd+alt+t` — **UNCONFIRMED** product call; verified unbound in agent-code `defaults.ts` today, and the host drops it if first-party later claims it.
+- Ruling: ids must start alphanumeric (`/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/`) — caught by a test: `--yes` passed the
+  first regex; harmless behind `id:` but it is the value interpolated into every mutation — cost: none (Todoist ids
+  are numeric/base32).
+- Ruling: quick-add `#`/`@` tokens need whitespace before them and a date needs a real sentence boundary after —
+  caught by tests: `jane@example.com` was highlighted as a label, `Monday.com` as a date — cost: a rare true token
+  glued to punctuation is not highlighted (hint layer only; Todoist still parses it).
+- Ruling: GitHub repo created **private** — publishing a public repo is the owner's call; Agent Code can install
+  from a private repo through its gh-auth path — cost: flip visibility when ready.
 - Ruling: due-now toasts default OFF — background polling spawns `td` every few minutes; opt-in only.
-- Ruling: `openUrl` restricted to Todoist web origins — the service is unsandboxed native code and must not
-  become a generic URL/command launcher for the frame.
+- Ruling: `openUrl` accepts http(s) only — the service is unsandboxed and must not open `file:`/custom schemes;
+  any web host is allowed because links inside users' own tasks (PRs, docs) would otherwise be dead in the
+  sandboxed frame. (Changed during build from "Todoist origins only".)
 
 ## Execution notes
 
-(appended during the build)
+- 2026-10-14: plan committed first; implementation landed in one pass. Owner asked mid-build to follow the Agent
+  Code conventions → history restructured: `main` = repo start, this branch = plan + implementation, Issue #1,
+  worktree `.worktrees/todoist-in-agent-code`, PR to follow.
+- UI reviewed through 16 dev-preview screenshots (Nord + Light, wide/pane/narrow, drawer, pickers, modal, setup
+  states). Fixed from review: modal dead space under one-line input; native date-picker glyph black on dark
+  themes (frame `color-scheme` now derived from the pushed canvas token).
+- Verified here: typecheck, 34 unit/boundary tests, 4 contract tests on the production build, deterministic
+  rebuild. Not verified: Agent Code itself (not launched), a real signed-in td, real browser OAuth, real brew.
