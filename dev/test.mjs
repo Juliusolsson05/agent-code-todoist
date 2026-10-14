@@ -31,7 +31,12 @@ try {
     // project root instead, injected as a constant.
     define: { __PROJECT_ROOT__: JSON.stringify(new URL('..', import.meta.url).pathname) },
   })
-  const result = spawnSync(process.execPath, ['--test', ...files.map(f => join(out, f))], { stdio: 'inherit' })
+  // Integration files each drive many real td processes (~0.4 s of Node
+  // start-up apiece) and assert our 20 s per-call deadline. Running them in
+  // parallel on a busy machine pushed td past that deadline and produced
+  // load-dependent failures, so they run one file at a time.
+  const concurrency = dir === 'integration' ? ['--test-concurrency=1'] : []
+  const result = spawnSync(process.execPath, ['--test', ...concurrency, ...files.map(f => join(out, f))], { stdio: 'inherit' })
   process.exitCode = result.status ?? 1
 } finally {
   await rm(out, { recursive: true, force: true })

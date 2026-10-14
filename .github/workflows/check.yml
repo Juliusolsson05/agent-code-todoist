@@ -8,7 +8,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -19,6 +19,9 @@ jobs:
       - run: npm ci --include=dev
       - run: npm run typecheck
       - run: npm test
+      # Real td 5.4.10 against the fake Todoist API (needs openssl, present on
+      # ubuntu-latest, for the throwaway interception CA).
+      - run: npm run test:integration
       # Rebuilds dist/ and runs the install contract against it, then fails if
       # the committed bundle differs from what this commit's source produces —
       # Agent Code installs the COMMITTED dist, so a stale one ships stale code.
