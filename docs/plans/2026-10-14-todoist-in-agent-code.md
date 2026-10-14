@@ -219,6 +219,25 @@ is the recorded file `tests/fixtures/td-5.4.10-signed-out-today.stderr`.
 - `testing/extension-contract.test.mjs` (`npm run test:extension`, builds first) — manifest namespacing and view
   reachability, exact permission list, committed entries export their contracts with no `jsxDEV`, and the
   built service answers `status`/rejects bad input over the real SDK `runService` wire.
+- **Integration (`npm run test:integration`, owner request mid-build):** the pinned real `td` 5.4.10 binary
+  (devDependency) runs end to end against `tests/support/fakeTodoist.mjs`, a stateful fake of the Todoist API v1.
+  - Interception: the SDK's undici `EnvHttpProxyAgent` honours `HTTPS_PROXY`, and Node honours
+    `NODE_EXTRA_CA_CERTS`. `tests/support/interceptor.mjs` mints a throwaway CA with openssl and terminates TLS
+    for `api.todoist.com` locally. Every proxy env case is set, because undici prefers the lowercase name and an
+    inherited `https_proxy` once sent test traffic to the real API.
+  - Payloads come from Doist's official OpenAPI examples (`tests/support/openapi.mjs`, pruned spec vendored by
+    `dev/vendor-openapi.mjs` with its sha256).
+  - Suites:
+    - `integration/reads` — every list kind, meta, sections, task detail, unicode, clipping, cursor pagination.
+    - `integration/writes` — every mutation's exact API body plus the state on the next read.
+    - `integration/faults` — revoked token, 429, 5xx, a failed write is never replayed, 404, malformed and future
+      payloads, hung API, dead network, no token in messages.
+    - `integration/runtime` — the real runtime in a simulated host whose messages pass a copy of Agent Code's
+      `isExtensionJson` (`tests/support/bridge.mjs`).
+    - `integration/golden` — a saved transcript of 21 operations' requests and rows
+      (`tests/fixtures/golden/td-5.4.10.json`, days normalised, `UPDATE_GOLDEN=1` re-records and refuses
+      failures).
+  - Files run one at a time, because parallel `td` processes on a loaded machine hit the 20 s deadline.
 - Dev preview (`npm run preview`, `npm run shots`): the real view modules against `dev/fakeHost.ts` with Agent
   Code's Nord and Light token values; screenshots reviewed for every state.
 
@@ -258,6 +277,12 @@ is the recorded file `tests/fixtures/td-5.4.10-signed-out-today.stderr`.
   glued to punctuation is not highlighted (hint layer only; Todoist still parses it).
 - Ruling: GitHub repo created **private** — publishing a public repo is the owner's call; Agent Code can install
   from a private repo through its gh-auth path — cost: flip visibility when ready.
+- Ruling: sections load per project (`sections` RPC + view cache) — `td section list` refuses to run without a
+  project; the first version's account-wide call silently returned nothing (found by the integration run).
+- Ruling: the service retries a failed READ once, never a write — td does not retry a transient 5xx; replaying
+  a write could duplicate a task.
+- Ruling: AUTH (revoked token) re-checks setup like NO_TOKEN — otherwise every action toasted HTTP 401.
+- Ruling: Completed asks for the last 14 days — td's default window is today only.
 - Ruling: due-now toasts default OFF — background polling spawns `td` every few minutes; opt-in only.
 - Ruling: `openUrl` accepts http(s) only — the service is unsandboxed and must not open `file:`/custom schemes;
   any web host is allowed because links inside users' own tasks (PRs, docs) would otherwise be dead in the
@@ -271,5 +296,10 @@ is the recorded file `tests/fixtures/td-5.4.10-signed-out-today.stderr`.
 - UI reviewed through 16 dev-preview screenshots (Nord + Light, wide/pane/narrow, drawer, pickers, modal, setup
   states). Fixed from review: modal dead space under one-line input; native date-picker glyph black on dark
   themes (frame `color-scheme` now derived from the pushed canvas token).
-- Verified here: typecheck, 34 unit/boundary tests, 4 contract tests on the production build, deterministic
-  rebuild. Not verified: Agent Code itself (not launched), a real signed-in td, real browser OAuth, real brew.
+- Owner then asked for extensive integration tests and saved payload simulations. That became the real-td
+  integration layer above. Its first run found four production bugs (sections, completed window, no retry on
+  5xx, revoked token) and three fake-data issues where Doist's spec examples disagree with the SDK: `tz_info`,
+  `inbox_project_id`, and a comment `item_id`.
+- Verified here: typecheck, 34 unit/boundary tests, 4 contract tests on the production build, 44 real-td
+  integration tests (green twice in a row sequentially; green on Linux CI), deterministic rebuild.
+- Not verified: Agent Code itself (not launched), a real Todoist account, real browser OAuth, real brew.
