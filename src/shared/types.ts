@@ -168,6 +168,9 @@ export type Settings = {
   defaultView: 'today' | 'upcoming' | 'inbox'
   dueReminders: boolean
   reminderIntervalMinutes: number
+  /** false (default): Todoist's own look — its colours, light or dark following
+   *  Agent Code, its font and logo. true: Agent Code's theme tokens. */
+  inheritTheme: boolean
 }
 
 /** Published by the runtime to every view. Views refetch their data whenever

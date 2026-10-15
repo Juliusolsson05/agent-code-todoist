@@ -127,7 +127,7 @@ export function createFakeContext(setupState: string, modal: boolean): ViewConte
     error: null,
     checkedAt: Date.now(),
   }
-  let state: HostState = { revision: 1, setup, settings: { tdPath: '', defaultView: 'today', dueReminders: false, reminderIntervalMinutes: 5 } }
+  let state: HostState = { revision: 1, setup, settings: { tdPath: '', defaultView: 'today', dueReminders: false, reminderIntervalMinutes: 5, inheritTheme: new URLSearchParams(location.search).get('inherit') === '1' } }
   const publish = () => listeners.forEach(l => l(state as unknown as JsonValue))
   const bump = () => { state = { ...state, revision: state.revision + 1 }; publish() }
   const wait = (ms = 220) => new Promise(r => setTimeout(r, ms))

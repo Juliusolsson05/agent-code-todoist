@@ -1,17 +1,17 @@
-import { i as a, k as i, l as n, j as o, B as m, m as c, s as d } from "./shared-SetupScreen.js";
-import { d as u } from "./shared-types.js";
-import { A as l } from "./shared-App.js";
-const j = u({
-  mount(t, s) {
-    a(d);
-    const r = i(), e = n(t);
-    return e.render(
-      /* @__PURE__ */ o.jsx(m.Provider, { value: c(s), children: /* @__PURE__ */ o.jsx(l, { variant: "modal" }) })
+import { i as n, k as i, l as m, m as c, j as o, B as d, n as u, s as p } from "./shared-SetupScreen.js";
+import { d as l } from "./shared-types.js";
+import { A as f } from "./shared-App.js";
+const w = l({
+  mount(t, e) {
+    n(p);
+    const r = i(), a = m(e.runtime), s = c(t);
+    return s.render(
+      /* @__PURE__ */ o.jsx(d.Provider, { value: u(e), children: /* @__PURE__ */ o.jsx(f, { variant: "modal" }) })
     ), () => {
-      r(), queueMicrotask(() => e.unmount());
+      r(), a(), queueMicrotask(() => s.unmount());
     };
   }
 });
 export {
-  j as default
+  w as default
 };

@@ -32,9 +32,32 @@ export function syncColorScheme(): () => void {
     const luminance = (0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]) / 255
     const scheme = luminance > 0.5 ? 'light' : 'dark'
     if (root.style.colorScheme !== scheme) root.style.colorScheme = scheme
+    // The Todoist look follows Agent Code's light/dark choice: it picks
+    // Todoist's light or dark palette from this (styles.css).
+    if (root.dataset.tdMode !== scheme) root.dataset.tdMode = scheme
   }
   apply()
   const observer = new MutationObserver(apply)
   observer.observe(root, { attributes: true, attributeFilter: ['style'] })
   return () => observer.disconnect()
+}
+
+/**
+ * Which look the frame uses: `todoist` (default) or `agent-code` (the
+ * "Use Agent Code's colours" setting). Set as `data-td-theme` on <html>, which
+ * styles.css keys every palette override on.
+ *
+ * Set synchronously from the runtime's current publication at mount, before
+ * React renders, so the first paint already has the right colours (no flash of
+ * the other theme), then kept in step with every publication.
+ */
+export function syncTheme(runtime: { state(): unknown; subscribe(listener: (state: unknown) => void): () => void }): () => void {
+  const root = document.documentElement
+  const apply = (state: unknown) => {
+    const inherit = (state as { settings?: { inheritTheme?: boolean } } | undefined)?.settings?.inheritTheme === true
+    const theme = inherit ? 'agent-code' : 'todoist'
+    if (root.dataset.tdTheme !== theme) root.dataset.tdTheme = theme
+  }
+  apply(runtime.state())
+  return runtime.subscribe(apply)
 }

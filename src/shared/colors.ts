@@ -37,10 +37,14 @@ export function colorHex(key: string | null | undefined): string {
 /** Priority hues as Todoist renders them (API 4 = p1). These are deliberately
  *  NOT theme tokens: users read p1-red as meaning, and a theme accent that
  *  happened to be red would make every task look urgent. */
+/** CSS variables, not literals: Todoist's dark theme uses lighter priority hues
+ *  (#ff7066 / #ff9a13 / #5297ff) than its light theme, so the value depends on
+ *  the active theme (styles.css). Consumers put these in `style`, never in an
+ *  SVG presentation attribute, where var() does not resolve. */
 export const PRIORITY_COLORS: Record<number, string> = {
-  4: '#d1453b',
-  3: '#eb8909',
-  2: '#246fe0',
+  4: 'var(--td-p1)',
+  3: 'var(--td-p2)',
+  2: 'var(--td-p3)',
   1: 'var(--td-muted)',
 }
 

@@ -81,6 +81,9 @@ Settings → Extensions → Todoist:
 - **Toast when a task becomes due** (off by default). While Agent Code runs, Today is
   checked in the background and a toast appears when a timed task comes due.
 - **Due check interval.** In minutes.
+- **Use Agent Code's colours** (off by default). Off, the extension looks like Todoist:
+  its colours, font and logo, light or dark following Agent Code. On, it uses your Agent
+  Code theme instead.
 
 ## Permissions, and why
 

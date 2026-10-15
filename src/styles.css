@@ -43,7 +43,89 @@
   --tone-tomorrow: #d9822b;
   --tone-week: #9d6cf0;
   --tone-future: var(--td-dim);
+
+  /* priority hues (p1 = API priority 4) */
+  --td-p1: #d1453b;
+  --td-p2: #eb8909;
+  --td-p3: #246fe0;
 }
+
+/*
+ * The Todoist look — the DEFAULT (data-td-theme="todoist", set by syncTheme).
+ *
+ * Values are Todoist's own design tokens (--product-library-*), read from
+ * app.todoist.com's computed styles on 2026-10-15 for `.theme_todoist` (light)
+ * and `.theme_dark`: base/raised backgrounds, display (text) tints, dividers,
+ * borders, the selected/hover fills of its sidebar, priority and schedule
+ * tints, and its system font stack at 13px. Light or dark follows Agent Code
+ * (data-td-mode from syncColorScheme), the way Todoist follows the OS.
+ *
+ * "Use Agent Code's colours" (data-td-theme="agent-code") skips these blocks and
+ * the :root mapping above applies unchanged.
+ */
+:root[data-td-theme="todoist"] {
+  --td-bg: #ffffff;              /* background-base-primary */
+  --td-surface: #fcfaf8;         /* background-base-secondary (sidebar) */
+  --td-surface-hi: #f8f5f2;      /* background-base-tertiary */
+  --td-elevated: #ffffff;        /* background-raised-primary */
+  --td-ink: #202020;             /* display-primary-idle-tint */
+  --td-dim: #666666;             /* display-secondary-idle-tint */
+  --td-muted: #999999;           /* display-tertiary-idle-tint */
+  --td-border: #eeeeee;          /* divider-primary */
+  --td-border-hi: #e6e6e6;       /* border-idle-tint */
+  --td-accent: #dc4c3e;          /* display-accent-primary-fill */
+  --td-accent-fg: #ffffff;
+  --td-accent-soft: #ffefe5;     /* selectable-secondary-selected-fill */
+  --td-hover: #f2efed;           /* selectable-secondary-hover-fill */
+  --td-selected: #ffefe5;
+  --td-danger: #dc4c3e;          /* actionable-destructive-idle-fill */
+  --td-focus: #dc4c3e;           /* actionable-focus-tint */
+  --td-input-bg: #ffffff;
+  --td-input-border: #e6e6e6;
+  --td-font: -apple-system, "system-ui", "Segoe UI", "Noto Sans", system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  --td-brand: #e44232;           /* logo red */
+  --td-shadow: 0 8px 24px -6px rgb(0 0 0 / 0.16), 0 1px 4px rgb(0 0 0 / 0.08);
+  --tone-overdue: #d1453b;       /* schedule-overdue-tint */
+  --tone-today: #058527;         /* schedule-today-tint */
+  --tone-tomorrow: #ad6200;      /* schedule-tomorrow-tint */
+  --tone-week: #692ec2;          /* schedule-next-week-tint */
+  --td-p1: #d1453b;              /* priorities-p1..p3-primary-idle-tint */
+  --td-p2: #eb8909;
+  --td-p3: #246fe0;
+}
+:root[data-td-theme="todoist"][data-td-mode="dark"] {
+  --td-bg: #1f1f1f;
+  --td-surface: #262626;
+  --td-surface-hi: #322f2a;
+  --td-elevated: #282828;
+  --td-ink: #ffffff;
+  --td-dim: #cccccc;
+  --td-muted: #808080;
+  --td-border: #3d3d3d;
+  --td-border-hi: #4b4b4b;
+  --td-accent: #de4c4a;
+  --td-accent-soft: #472525;
+  --td-hover: #322f2a;
+  --td-selected: #472525;
+  --td-danger: #de4c4a;
+  --td-focus: #e26a60;
+  --td-input-bg: #282828;
+  --td-input-border: #3d3d3d;
+  --td-shadow: 0 10px 30px -8px rgb(0 0 0 / 0.6), 0 2px 6px rgb(0 0 0 / 0.3);
+  --tone-overdue: #ff7066;
+  --tone-today: #25b84c;
+  --tone-tomorrow: #ff9a14;
+  --tone-week: #a970ff;
+  --td-p1: #ff7066;
+  --td-p2: #ff9a13;
+  --td-p3: #5297ff;
+}
+/* Todoist marks the selected sidebar row with its red accent text. */
+:root[data-td-theme="todoist"] .td-nav-item.is-active { color: #d33322; }  /* display-accent-primary-tint */
+:root[data-td-theme="todoist"][data-td-mode="dark"] .td-nav-item.is-active { color: #e26a60; }
+/* Exactly one setup mark shows: Todoist's logo in the Todoist look. */
+:root:not([data-td-theme="agent-code"]) .td-mark-own,
+:root[data-td-theme="agent-code"] .td-mark-todoist { display: none; }
 
 * { box-sizing: border-box; }
 

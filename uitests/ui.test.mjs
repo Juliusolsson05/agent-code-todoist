@@ -188,6 +188,24 @@ test('acting on a task from page 2 keeps the loaded pages', async () => {
   })
 })
 
+test('the Todoist look is the default; "Use Agent Code\'s colours" switches live', async () => {
+  await withView({}, async ({ page, rt }) => {
+    await row(page, 'Stand-up').waitFor()
+    const look = () => page.evaluate(() => ({ theme: document.documentElement.dataset.tdTheme, bg: getComputedStyle(document.body).backgroundColor, accent: getComputedStyle(document.documentElement).getPropertyValue('--td-accent').trim() }))
+    // No host theme pushed: the frame falls back to dark → Todoist's dark palette.
+    assert.deepEqual(await look(), { theme: 'todoist', bg: 'rgb(31, 31, 31)', accent: '#de4c4a' })
+    // Agent Code switches to a light theme (it rewrites the inline --theme-* tokens).
+    await page.evaluate(() => document.documentElement.style.setProperty('--theme-canvas', '#faf9f6'))
+    await eventually(async () => (await look()).bg === 'rgb(255, 255, 255)', { what: 'Todoist light' })
+    assert.equal((await look()).accent, '#dc4c3e')
+    await rt.request('setSetting', { key: 'todoist.inheritTheme', value: true })
+    await eventually(async () => (await look()).theme === 'agent-code', { what: 'the switch' })
+    assert.notEqual((await look()).accent, '#dc4c3e', 'Agent Code\'s tokens apply')
+    await rt.request('setSetting', { key: 'todoist.inheritTheme', value: false })
+    await eventually(async () => (await look()).theme === 'todoist', { what: 'the switch back' })
+  })
+})
+
 test('the "Open on" setting decides where the pane opens', async () => {
   await withView({ storage: { 'todoist.defaultView': 'inbox' } }, async ({ page }) => {
     await page.getByRole('heading', { name: 'Inbox' }).waitFor()

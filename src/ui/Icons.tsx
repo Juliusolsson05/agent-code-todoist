@@ -53,7 +53,7 @@ export const FlagIcon = (p: IconProps) => (
   <Svg {...p}><path d="M3.5 14V2.8M3.5 3h8.2l-1.6 3 1.6 3H3.5" /></Svg>
 )
 export const FlagFilledIcon = ({ color, ...p }: IconProps & { color: string }) => (
-  <Svg {...p} stroke={color}><path d="M3.5 14V2.8" /><path d="M3.5 3h8.2l-1.6 3 1.6 3H3.5z" fill={color} /></Svg>
+  <Svg {...p} style={{ stroke: color }}><path d="M3.5 14V2.8" /><path d="M3.5 3h8.2l-1.6 3 1.6 3H3.5z" style={{ fill: color }} /></Svg>
 )
 export const CalendarIcon = (p: IconProps) => (
   <Svg {...p}><rect x="2.5" y="3" width="11" height="10.5" rx="2" /><path d="M2.5 6h11M5.5 1.8v2.4M10.5 1.8v2.4" /></Svg>
@@ -92,12 +92,22 @@ export const KeyboardIcon = (p: IconProps) => (
 export const SignOutIcon = (p: IconProps) => (
   <Svg {...p}><path d="M6.5 13.5h-3a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1h3M10.5 11 13.5 8l-3-3M13.5 8h-7" /></Svg>
 )
-// Our own mark for the setup screens: a check in a rounded tile. Deliberately
-// NOT a copy of Todoist's logo — this is a third-party integration, and it says
-// "Todoist" in words where it matters.
+// The setup screens' mark. In the default Todoist look it is Todoist's own logo
+// (app.todoist.com/todoist.svg, owner request 2026-10-15: "their font and
+// branding"); with "Use Agent Code's colours" on it is our neutral check tile.
+// Both render and CSS shows one ([data-td-theme] in styles.css), so the swap
+// needs no React state and never flashes.
 export const AppMark = (p: IconProps) => (
-  <svg width={p.size ?? 28} height={p.size ?? 28} viewBox="0 0 32 32" aria-hidden="true">
-    <rect width="32" height="32" rx="8" fill="var(--td-brand)" />
-    <path d="m9.5 16.5 4.5 4.5 8.5-9" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
+  <>
+    <svg className="td-mark-todoist" width={p.size ?? 28} height={p.size ?? 28} viewBox="0 0 32 32" aria-hidden="true">
+      <path fillRule="evenodd" clipRule="evenodd" fill="#E44232" d="M4 0h24c2.2 0 4 1.8 4 4v24c0 2.2-1.8 4-4 4H4c-2.2 0-4-1.8-4-4v-5.374l.057.033c1.365.794 4.592 2.674 5.382 3.12.478.27.936.263 1.397-.003l6.328-3.641.012-.007.035-.02 6.575-3.784c.277-.16.291-.652-.02-.829l-.217-.124c-.316-.18-.726-.413-.901-.516a1.02 1.02 0 0 0-.998.012c-.154.09-10.5 6.038-10.847 6.235a1.349 1.349 0 0 1-1.338 0L0 19.927v-2.693l.057.033c1.365.795 4.592 2.674 5.382 3.12.478.27.936.264 1.397-.002.276-.16 3.307-1.903 6.367-3.664l.024-.014 6.559-3.775c.277-.16.291-.651-.02-.828l-.217-.124c-.316-.18-.726-.414-.901-.517a1.02 1.02 0 0 0-.998.012c-.154.09-10.5 6.039-10.847 6.235a1.349 1.349 0 0 1-1.338 0L0 14.535v-2.693l.056.033a943.17 943.17 0 0 0 5.383 3.12c.478.27.936.264 1.397-.002l6.374-3.668.008-.005c3.2-1.84 6.426-3.698 6.568-3.78.277-.16.291-.65-.02-.828l-.217-.124c-.317-.18-.727-.414-.901-.516a1.02 1.02 0 0 0-.998.012c-.154.089-10.5 6.038-10.847 6.235a1.349 1.349 0 0 1-1.338 0L0 9.143V4c0-2.2 1.8-4 4-4Z" />
+      <path fill="#fff" d="M6.836 14.993c.276-.16 3.311-1.906 6.374-3.668l.008-.005c3.2-1.84 6.426-3.698 6.568-3.78.277-.16.29-.65-.02-.828l-.217-.124c-.316-.18-.727-.414-.902-.516a1.02 1.02 0 0 0-.997.012c-.155.089-10.501 6.038-10.847 6.235a1.349 1.349 0 0 1-1.339 0L0 9.143v2.698l.056.033c1.364.795 4.592 2.674 5.383 3.12.478.27.936.264 1.397-.002Z" />
+      <path fill="#fff" d="m6.836 20.385 6.366-3.664.024-.014 6.56-3.775c.277-.16.29-.651-.02-.828l-.217-.124c-.316-.18-.727-.414-.902-.517a1.02 1.02 0 0 0-.997.012c-.155.09-10.501 6.039-10.847 6.235a1.349 1.349 0 0 1-1.339 0L0 14.535v2.699l.057.033c1.365.795 4.591 2.674 5.382 3.12.478.27.936.264 1.397-.002Z" />
+      <path fill="#fff" d="m13.21 22.108-6.374 3.668c-.461.266-.919.273-1.397.003-.79-.446-4.018-2.326-5.382-3.12L0 22.626v-2.699l5.464 3.175c.413.238.925.235 1.339 0 .346-.197 10.692-6.146 10.847-6.235a1.02 1.02 0 0 1 .997-.012c.175.103.586.336.902.516l.218.124c.31.177.296.669.019.829l-6.575 3.784Z" />
+    </svg>
+    <svg className="td-mark-own" width={p.size ?? 28} height={p.size ?? 28} viewBox="0 0 32 32" aria-hidden="true">
+      <rect width="32" height="32" rx="8" style={{ fill: 'var(--td-brand)' }} />
+      <path d="m9.5 16.5 4.5 4.5 8.5-9" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  </>
 )

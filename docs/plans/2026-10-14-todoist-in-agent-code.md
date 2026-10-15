@@ -384,6 +384,13 @@ Both reviewers gave the verdict FIX-BEFORE-MERGE. Every finding was checked agai
   Not added: a read-only-account test (the fake world cannot sign td in read-only); the guard is the same
   `user.readOnly` check that already hides every write control.
 
+- **Todoist look by default** (owner, 2026-10-15): Todoist's own design tokens, light and dark, read from
+  app.todoist.com's computed styles (`.theme_todoist`, `.theme_dark`), plus its system font stack and logo, applied
+  through `data-td-theme="todoist"` in `src/styles.css`. Light or dark follows Agent Code's canvas luminance.
+  The setting "Use Agent Code's colours" (`todoist.inheritTheme`, boolean) restores the host-token mapping.
+  Ruling: a boolean, not a theme picker — Agent Code settings have no enum type — cost: none for two choices.
+  Ruling: priority colours become CSS variables because Todoist's dark priorities differ (#ff7066 etc.).
+
 ## Execution notes
 
 - 2026-10-14: plan committed first; implementation landed in one pass. Owner asked mid-build to follow the Agent

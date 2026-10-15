@@ -6,9 +6,10 @@ import { mkdir } from 'node:fs/promises'
 import { chromium } from 'playwright'
 import { createServer } from 'vite'
 
-const server = await createServer({ configFile: new URL('../vite.dev.config.ts', import.meta.url).pathname, logLevel: 'error' })
+// Any free port: 5199 is often held by a running `npm run preview`.
+const server = await createServer({ configFile: new URL('../vite.dev.config.ts', import.meta.url).pathname, logLevel: 'error', server: { port: 5400 + Math.floor(Math.random() * 400), strictPort: false } })
 await server.listen()
-const base = 'http://localhost:5199/'
+const base = server.resolvedUrls.local[0]
 await mkdir(new URL('./shots/', import.meta.url), { recursive: true })
 const out = name => new URL(`./shots/${name}.png`, import.meta.url).pathname
 
@@ -45,6 +46,9 @@ await shot('setup-missing-nord', 'state=td-missing&theme=nord', pane)
 await shot('setup-signedout-light', 'state=signed-out&theme=light', pane)
 await shot('setup-login-nord', 'state=login&theme=nord', pane)
 await shot('help-nord', 'theme=nord', wide, async p => { await p.keyboard.press('?'); await p.waitForTimeout(200) })
+// "Use Agent Code's colours" on: the host's Nord theme instead of Todoist's look.
+await shot('inherit-nord-wide', 'theme=nord&inherit=1', wide)
+await shot('inherit-setup-nord', 'state=signed-out&theme=nord&inherit=1', pane)
 
 await browser.close()
 await server.close()

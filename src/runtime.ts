@@ -44,6 +44,7 @@ const DEFAULT_SETTINGS: Settings = {
   defaultView: 'today',
   dueReminders: false,
   reminderIntervalMinutes: 5,
+  inheritTheme: false,
 }
 
 export default defineRuntime({
@@ -55,11 +56,12 @@ export default defineRuntime({
     let starting: Promise<void> | null = null
 
     const readSettings = async (): Promise<Settings> => {
-      const [tdPath, defaultView, dueReminders, interval] = await Promise.all([
+      const [tdPath, defaultView, dueReminders, interval, inheritTheme] = await Promise.all([
         api.storage.get<string>('todoist.tdPath'),
         api.storage.get<string>('todoist.defaultView'),
         api.storage.get<boolean>('todoist.dueReminders'),
         api.storage.get<number>('todoist.reminderIntervalMinutes'),
+        api.storage.get<boolean>('todoist.inheritTheme'),
       ])
       // Settings rows are written by Agent Code's Settings UI into OUR storage
       // under the full id; the manifest default is display-only and never
@@ -69,6 +71,7 @@ export default defineRuntime({
         defaultView: defaultView === 'upcoming' || defaultView === 'inbox' ? defaultView : 'today',
         dueReminders: dueReminders === true,
         reminderIntervalMinutes: typeof interval === 'number' && interval >= 1 ? Math.min(120, Math.round(interval)) : 5,
+        inheritTheme: inheritTheme === true,
       }
       return settings
     }
@@ -176,7 +179,7 @@ export default defineRuntime({
     context.registerRequest('settings', async () => (await readSettings()) as unknown as JsonValue)
     context.registerRequest('setSetting', async input => {
       const p = (input ?? {}) as { key?: string; value?: JsonValue }
-      const allowed = ['todoist.defaultView', 'todoist.dueReminders', 'todoist.reminderIntervalMinutes', 'todoist.tdPath']
+      const allowed = ['todoist.defaultView', 'todoist.dueReminders', 'todoist.reminderIntervalMinutes', 'todoist.tdPath', 'todoist.inheritTheme']
       if (!p.key || !allowed.includes(p.key) || p.value === undefined) throw new Error('INVALID: Unknown setting.')
       await api.storage.set(p.key, p.value)
       await readSettings()

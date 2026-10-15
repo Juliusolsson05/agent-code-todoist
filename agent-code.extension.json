@@ -129,6 +129,13 @@
         "title": "Due check interval (minutes)",
         "type": "number",
         "default": 5
+      },
+      {
+        "id": "todoist.inheritTheme",
+        "title": "Use Agent Code's colours",
+        "description": "Off: Todoist's own look (its colours, light or dark following Agent Code, its font and logo). On: inherit Agent Code's theme.",
+        "type": "boolean",
+        "default": false
       }
     ]
   },

@@ -4,7 +4,7 @@ import { createRoot } from 'react-dom/client'
 import styles from './styles.css?inline'
 import { App } from './ui/App'
 import { BridgeContext, createBridge } from './ui/bridge'
-import { injectStyles, syncColorScheme } from './ui/injectStyles'
+import { injectStyles, syncColorScheme, syncTheme } from './ui/injectStyles'
 
 // The full Todoist workspace in a floating modal (`todoist.window`, command
 // "Todoist: Open in Modal") — the same App as the pane, for a quick look
@@ -17,6 +17,7 @@ export default defineView({
   mount(element, context) {
     injectStyles(styles)
     const stopScheme = syncColorScheme()
+    const stopTheme = syncTheme(context.runtime)
     const root = createRoot(element)
     root.render(
       <BridgeContext.Provider value={createBridge(context)}>
@@ -25,6 +26,7 @@ export default defineView({
     )
     return () => {
       stopScheme()
+      stopTheme()
       queueMicrotask(() => root.unmount())
     }
   },
