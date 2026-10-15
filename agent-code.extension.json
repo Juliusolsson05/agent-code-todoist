@@ -1,0 +1,149 @@
+{
+  "id": "todoist",
+  "name": "Todoist",
+  "description": "Your Todoist tasks, projects and quick add inside Agent Code, powered by the official td CLI.",
+  "version": "0.1.0",
+  "apiVersion": 2,
+  "entry": "dist/runtime.js",
+  "keywords": [
+    "todoist",
+    "tasks",
+    "todo",
+    "productivity"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onView:todoist.main",
+    "onView:todoist.quickAdd",
+    "onView:todoist.window",
+    "onCommand:todoist.refresh"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "id": "todoist.main",
+        "title": "Todoist: Open",
+        "description": "Open your Todoist tasks in a pane.",
+        "keywords": [
+          "todoist",
+          "tasks",
+          "todo",
+          "today",
+          "inbox",
+          "projects"
+        ]
+      },
+      {
+        "id": "todoist.window",
+        "title": "Todoist: Open in Modal",
+        "description": "Open your Todoist tasks in a floating window instead of a pane.",
+        "keywords": [
+          "todoist",
+          "tasks",
+          "todo",
+          "modal",
+          "popup",
+          "window",
+          "overlay"
+        ]
+      },
+      {
+        "id": "todoist.quickAdd",
+        "title": "Todoist: Quick Add Task",
+        "description": "Add a task with natural language, optionally linked to an agent.",
+        "keywords": [
+          "todoist",
+          "add task",
+          "new task",
+          "todo",
+          "capture"
+        ]
+      },
+      {
+        "id": "todoist.refresh",
+        "title": "Todoist: Refresh",
+        "keywords": [
+          "todoist",
+          "sync",
+          "reload"
+        ]
+      }
+    ],
+    "views": [
+      {
+        "id": "todoist.main",
+        "title": "Todoist",
+        "mount": "panel",
+        "entry": "dist/view.js"
+      },
+      {
+        "id": "todoist.window",
+        "title": "Todoist",
+        "mount": "modal",
+        "entry": "dist/windowView.js"
+      },
+      {
+        "id": "todoist.quickAdd",
+        "title": "Quick Add Task",
+        "mount": "modal",
+        "entry": "dist/quickAddView.js"
+      }
+    ],
+    "services": [
+      {
+        "id": "todoist.td",
+        "title": "Todoist CLI bridge",
+        "entry": "dist-service/service.mjs"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "todoist.quickAdd",
+        "key": "cmd+alt+t"
+      }
+    ],
+    "settings": [
+      {
+        "id": "todoist.tdPath",
+        "title": "Path to the td CLI",
+        "description": "Leave empty to find td automatically (Homebrew, npm, PATH).",
+        "type": "string",
+        "default": ""
+      },
+      {
+        "id": "todoist.defaultView",
+        "title": "Open on",
+        "description": "today, upcoming or inbox.",
+        "type": "string",
+        "default": "today"
+      },
+      {
+        "id": "todoist.dueReminders",
+        "title": "Toast when a task becomes due",
+        "description": "Checks Today in the background every few minutes while Agent Code runs.",
+        "type": "boolean",
+        "default": false
+      },
+      {
+        "id": "todoist.reminderIntervalMinutes",
+        "title": "Due check interval (minutes)",
+        "type": "number",
+        "default": 5
+      },
+      {
+        "id": "todoist.inheritTheme",
+        "title": "Use Agent Code's colours",
+        "description": "Off: Todoist's own look (its colours, light or dark following Agent Code, its font and logo). On: inherit Agent Code's theme.",
+        "type": "boolean",
+        "default": false
+      }
+    ]
+  },
+  "permissions": [
+    "service.run",
+    "notifications.show",
+    "sessions.observe",
+    "workspace.observe",
+    "panes.observe"
+  ]
+}

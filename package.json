@@ -1,0 +1,41 @@
+{
+  "name": "agent-code-todoist",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Todoist inside Agent Code, driven by the official td CLI.",
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc --noEmit && vite build && npm run build:service",
+    "build:service": "esbuild server/service.ts --bundle --platform=node --format=esm --target=node22 --outdir=dist-service --out-extension:.js=.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node dev/test.mjs tests",
+    "test:extension": "NODE_ENV=production npm run build && node dev/test.mjs testing",
+    "test:integration": "node dev/test.mjs integration",
+    "test:ui": "node dev/test.mjs uitests",
+    "verify": "npm run test:extension && npm test",
+    "preview": "vite --config vite.dev.config.ts",
+    "shots": "node dev/shots.mjs",
+    "record": "node dev/record.mjs"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "@doist/todoist-sdk": "15.3.1"
+  },
+  "devDependencies": {
+    "@doist/todoist-cli": "5.4.10",
+    "@types/node": "^22.20.4",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "agent-code-extension-api": "github:Juliusolsson05/agent-code-extension-api#v0.11.0",
+    "esbuild": "^0.21.5",
+    "playwright": "^1.63.0",
+    "typescript": "^5.5.0",
+    "vite": "^5.4.19"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

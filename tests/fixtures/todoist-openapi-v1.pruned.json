@@ -1,0 +1,2877 @@
+{
+ "_provenance": {
+  "source": "https://developer.todoist.com/openapi.json",
+  "sha256": "a763d4d454977d48f134a68d6a7a0fcc4860712c8ef04766b4931120628d8b3c",
+  "title": "Todoist API",
+  "version": "1",
+  "vendoredAt": "2026-10-14",
+  "roots": [
+   "PaginatedList_ItemSyncView_",
+   "ItemSyncView",
+   "PaginatedList_AnyProjectSyncViewResponse_",
+   "AnyProjectSyncViewResponse",
+   "PaginatedList_SectionSyncView_",
+   "SectionSyncView",
+   "PaginatedList_LabelRestView_",
+   "LabelRestView",
+   "PaginatedList_NoteSyncView_",
+   "NoteSyncView",
+   "UserJSON",
+   "TasksCompletedDateResponse"
+  ]
+ },
+ "components": {
+  "schemas": {
+   "AnyProjectSyncViewResponse": {
+    "anyOf": [
+     {
+      "$ref": "#/components/schemas/PersonalProjectSyncView"
+     },
+     {
+      "$ref": "#/components/schemas/WorkspaceProjectSyncView"
+     }
+    ],
+    "title": "Project object",
+    "description": "Can be either a personal or a workspace project."
+   },
+   "EffectScope": {
+    "properties": {
+     "mode": {
+      "type": "string",
+      "const": "all",
+      "title": "Mode",
+      "description": "Where the effect applies. Always `all` for now.",
+      "default": "all"
+     }
+    },
+    "type": "object",
+    "title": "EffectScope"
+   },
+   "ItemSyncView": {
+    "properties": {
+     "user_id": {
+      "type": "string",
+      "title": "User Id",
+      "description": "String ID of the user who owns the task.",
+      "examples": [
+       "1234567"
+      ]
+     },
+     "id": {
+      "type": "string",
+      "title": "Id",
+      "description": "String ID of the task.",
+      "examples": [
+       "6XGgmFVcrG5RRjVr"
+      ]
+     },
+     "project_id": {
+      "type": "string",
+      "title": "Project Id",
+      "description": "String ID of the project that contains the task.",
+      "examples": [
+       "6XGgm6PHrGgMpCFX"
+      ]
+     },
+     "section_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Section Id",
+      "description": "String ID of the section that contains the task, or `null` if the task is not in a section.",
+      "examples": [
+       "6fFPHV272WWh3gpW"
+      ]
+     },
+     "parent_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Parent Id",
+      "description": "String ID of the parent task, or `null` if this is a top-level task.",
+      "examples": [
+       "6XGgmFVcrG5RRjVr"
+      ]
+     },
+     "added_by_uid": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Added By Uid",
+      "description": "String ID of the user who created the task, or `null` if unknown.",
+      "examples": [
+       "1234567"
+      ]
+     },
+     "assigned_by_uid": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Assigned By Uid",
+      "description": "String ID of the user who assigned the task, or `null` if unassigned.",
+      "examples": [
+       "1234567"
+      ]
+     },
+     "responsible_uid": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Responsible Uid",
+      "description": "String ID of the user responsible for the task, or `null` if unassigned.",
+      "examples": [
+       "1234567"
+      ]
+     },
+     "labels": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "title": "Labels",
+      "description": "Names of labels attached to the task.",
+      "examples": [
+       [
+        "priority"
+       ]
+      ]
+     },
+     "deadline": {
+      "anyOf": [
+       {
+        "additionalProperties": {
+         "anyOf": [
+          {
+           "type": "string"
+          },
+          {
+           "type": "null"
+          }
+         ]
+        },
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Deadline",
+      "description": "Deadline details for the task, or `null` when the task has no deadline.",
+      "examples": [
+       {
+        "date": "2025-02-12",
+        "lang": "en"
+       }
+      ]
+     },
+     "duration": {
+      "anyOf": [
+       {
+        "additionalProperties": {
+         "anyOf": [
+          {
+           "type": "integer"
+          },
+          {
+           "type": "string"
+          }
+         ]
+        },
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Duration",
+      "description": "Task duration details, or `null` when the task has no duration.",
+      "examples": [
+       {
+        "amount": 30,
+        "unit": "minute"
+       }
+      ]
+     },
+     "is_collapsed": {
+      "type": "boolean",
+      "title": "Is Collapsed",
+      "description": "Whether the task is collapsed in the user's view.",
+      "examples": [
+       false
+      ]
+     },
+     "checked": {
+      "type": "boolean",
+      "title": "Checked",
+      "description": "Whether the task is completed.",
+      "examples": [
+       false
+      ]
+     },
+     "is_deleted": {
+      "type": "boolean",
+      "title": "Is Deleted",
+      "description": "Whether the task is deleted.",
+      "examples": [
+       false
+      ]
+     },
+     "added_at": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "format": "date-time",
+      "title": "Added At",
+      "description": "Date and time when the task was created, or `null` if unknown.",
+      "examples": [
+       "2025-01-15T10:30:00Z"
+      ]
+     },
+     "completed_at": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "format": "date-time",
+      "title": "Completed At",
+      "description": "Date and time when the task was completed, or `null` if active.",
+      "examples": [
+       "2025-01-16T10:30:00Z"
+      ]
+     },
+     "completed_by_uid": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Completed By Uid",
+      "description": "String ID of the user who completed the task, or `null` if active.",
+      "examples": [
+       "1234567"
+      ]
+     },
+     "updated_at": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "format": "date-time",
+      "title": "Updated At",
+      "description": "Date and time when the task was last updated, or `null` if unknown.",
+      "examples": [
+       "2025-01-17T10:30:00Z"
+      ]
+     },
+     "due": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Due",
+      "description": "Due date details for the task, or `null` when the task has no due date.",
+      "examples": [
+       {
+        "date": "2025-02-12",
+        "is_recurring": false,
+        "lang": "en",
+        "string": "tomorrow"
+       }
+      ]
+     },
+     "priority": {
+      "type": "integer",
+      "title": "Priority",
+      "description": "Task priority from 1 (normal) to 4 (urgent).",
+      "examples": [
+       1
+      ]
+     },
+     "child_order": {
+      "type": "integer",
+      "title": "Child Order",
+      "description": "Position of the task among sibling tasks.",
+      "examples": [
+       1
+      ]
+     },
+     "order_key": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Order Key",
+      "description": "Fractional-indexing order key: tasks sort by comparing keys lexicographically among siblings sharing the same project, section and parent task. May be `null` for tasks not yet migrated.",
+      "examples": [
+       "a1V"
+      ]
+     },
+     "content": {
+      "type": "string",
+      "title": "Content",
+      "description": "Task content.",
+      "examples": [
+       "Buy milk"
+      ]
+     },
+     "description": {
+      "type": "string",
+      "title": "Description",
+      "description": "Task description.",
+      "examples": [
+       "Pick up organic milk"
+      ]
+     },
+     "note_count": {
+      "type": "integer",
+      "title": "Note Count",
+      "description": "**Deprecated**: only returns 0 and is marked for removal.",
+      "examples": [
+       0
+      ]
+     },
+     "day_order": {
+      "type": "integer",
+      "title": "Day Order",
+      "description": "Task order for day-based views.",
+      "examples": [
+       1
+      ]
+     },
+     "completed_count": {
+      "type": "integer",
+      "title": "Completed Count",
+      "description": "Number of times the task has been marked as completed. Increments on every completion, including recurring occurrences and re-completions of a previously reopened task. Decremented when a recurring completion is undone.",
+      "examples": [
+       3
+      ]
+     },
+     "postponed_count": {
+      "type": "integer",
+      "title": "Postponed Count",
+      "description": "Number of times the task's due date has been rescheduled by the user. Increments on any due-date change between two set dates (forward or backward); recurring completions and undos are not counted.",
+      "examples": [
+       1
+      ]
+     }
+    },
+    "type": "object",
+    "required": [
+     "user_id",
+     "id",
+     "project_id",
+     "section_id",
+     "parent_id",
+     "added_by_uid",
+     "assigned_by_uid",
+     "responsible_uid",
+     "labels",
+     "deadline",
+     "duration",
+     "is_collapsed",
+     "checked",
+     "is_deleted",
+     "added_at",
+     "completed_at",
+     "completed_by_uid",
+     "updated_at",
+     "due",
+     "priority",
+     "child_order",
+     "order_key",
+     "content",
+     "description",
+     "note_count",
+     "day_order",
+     "completed_count",
+     "postponed_count"
+    ],
+    "title": "ItemSyncView",
+    "description": "A class with fields representing an ItemView which will be returned to\nclients in a sync (or sync-like) response."
+   },
+   "LabelRestView": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "title": "Id",
+      "description": "String ID of the label.",
+      "examples": [
+       "2147509004"
+      ]
+     },
+     "name": {
+      "type": "string",
+      "title": "Name",
+      "description": "Label name.",
+      "examples": [
+       "Priority"
+      ]
+     },
+     "color": {
+      "type": "string",
+      "title": "Color",
+      "description": "Label color name.",
+      "examples": [
+       "berry_red"
+      ]
+     },
+     "order": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Order",
+      "description": "Position of the label in the label list, or `null` when no explicit order is set.",
+      "examples": [
+       12
+      ]
+     },
+     "is_favorite": {
+      "type": "boolean",
+      "title": "Is Favorite",
+      "description": "Whether the label is marked as a favorite.",
+      "examples": [
+       false
+      ]
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "name",
+     "color",
+     "order",
+     "is_favorite"
+    ],
+    "title": "LabelRestView"
+   },
+   "NoteSyncView": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "title": "Id",
+      "description": "String ID of the comment.",
+      "examples": [
+       "6XGgmFQrx44wfGHr"
+      ]
+     },
+     "posted_uid": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Posted Uid",
+      "description": "String ID of the user who posted the comment.",
+      "examples": [
+       "1234567"
+      ]
+     },
+     "content": {
+      "type": "string",
+      "title": "Content",
+      "description": "Comment content.",
+      "default": "",
+      "examples": [
+       "Looks good to me."
+      ]
+     },
+     "file_attachment": {
+      "anyOf": [
+       {
+        "additionalProperties": {
+         "anyOf": [
+          {
+           "type": "string"
+          },
+          {
+           "type": "integer"
+          },
+          {
+           "items": {},
+           "type": "array"
+          },
+          {
+           "additionalProperties": true,
+           "type": "object"
+          },
+          {
+           "type": "null"
+          }
+         ]
+        },
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "File Attachment",
+      "description": "File attachment metadata, or `null` when the comment has no attachment.",
+      "examples": [
+       null
+      ]
+     },
+     "uids_to_notify": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Uids To Notify",
+      "description": "String IDs of users notified by the comment.",
+      "examples": [
+       [
+        "1234567"
+       ]
+      ]
+     },
+     "is_deleted": {
+      "type": "boolean",
+      "title": "Is Deleted",
+      "description": "Whether the comment is deleted.",
+      "examples": [
+       false
+      ]
+     },
+     "posted_at": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "format": "date-time",
+      "title": "Posted At",
+      "description": "Date and time when the comment was posted, or `null` if unknown.",
+      "examples": [
+       "2025-01-15T10:30:00Z"
+      ]
+     },
+     "reactions": {
+      "anyOf": [
+       {
+        "additionalProperties": {
+         "items": {
+          "type": "string"
+         },
+         "type": "array"
+        },
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Reactions",
+      "description": "Reaction emoji mapped to user IDs that reacted.",
+      "examples": [
+       {
+        "👍": [
+         "1234567"
+        ]
+       }
+      ]
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "posted_uid",
+     "file_attachment",
+     "uids_to_notify",
+     "is_deleted",
+     "posted_at",
+     "reactions"
+    ],
+    "title": "NoteSyncView",
+    "description": "The base class for NoteSyncViews, to be extended for Items and Projects.\n\nThis class should generally not be instantiated directly, as it serves as a\ncommon structure for Items and Projects."
+   },
+   "PaginatedList_AnyProjectSyncViewResponse_": {
+    "properties": {
+     "results": {
+      "items": {
+       "$ref": "#/components/schemas/AnyProjectSyncViewResponse"
+      },
+      "type": "array",
+      "title": "Results",
+      "description": "Objects in the current page of results."
+     },
+     "next_cursor": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Next Cursor",
+      "description": "Cursor for the next page of results, or `null` when there are no more results.",
+      "examples": [
+       "14540000435w8hj8pXXwPQJJch.X9DBH8ya2Xenok55"
+      ]
+     }
+    },
+    "type": "object",
+    "required": [
+     "results",
+     "next_cursor"
+    ],
+    "title": "PaginatedList"
+   },
+   "PaginatedList_ItemSyncView_": {
+    "properties": {
+     "results": {
+      "items": {
+       "$ref": "#/components/schemas/ItemSyncView"
+      },
+      "type": "array",
+      "title": "Results",
+      "description": "Objects in the current page of results."
+     },
+     "next_cursor": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Next Cursor",
+      "description": "Cursor for the next page of results, or `null` when there are no more results.",
+      "examples": [
+       "14540000435w8hj8pXXwPQJJch.X9DBH8ya2Xenok55"
+      ]
+     }
+    },
+    "type": "object",
+    "required": [
+     "results",
+     "next_cursor"
+    ],
+    "title": "PaginatedList"
+   },
+   "PaginatedList_LabelRestView_": {
+    "properties": {
+     "results": {
+      "items": {
+       "$ref": "#/components/schemas/LabelRestView"
+      },
+      "type": "array",
+      "title": "Results",
+      "description": "Objects in the current page of results."
+     },
+     "next_cursor": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Next Cursor",
+      "description": "Cursor for the next page of results, or `null` when there are no more results.",
+      "examples": [
+       "14540000435w8hj8pXXwPQJJch.X9DBH8ya2Xenok55"
+      ]
+     }
+    },
+    "type": "object",
+    "required": [
+     "results",
+     "next_cursor"
+    ],
+    "title": "PaginatedList"
+   },
+   "PaginatedList_NoteSyncView_": {
+    "properties": {
+     "results": {
+      "items": {
+       "$ref": "#/components/schemas/NoteSyncView"
+      },
+      "type": "array",
+      "title": "Results",
+      "description": "Objects in the current page of results."
+     },
+     "next_cursor": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Next Cursor",
+      "description": "Cursor for the next page of results, or `null` when there are no more results.",
+      "examples": [
+       "14540000435w8hj8pXXwPQJJch.X9DBH8ya2Xenok55"
+      ]
+     }
+    },
+    "type": "object",
+    "required": [
+     "results",
+     "next_cursor"
+    ],
+    "title": "PaginatedList"
+   },
+   "PaginatedList_SectionSyncView_": {
+    "properties": {
+     "results": {
+      "items": {
+       "$ref": "#/components/schemas/SectionSyncView"
+      },
+      "type": "array",
+      "title": "Results",
+      "description": "Objects in the current page of results."
+     },
+     "next_cursor": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Next Cursor",
+      "description": "Cursor for the next page of results, or `null` when there are no more results.",
+      "examples": [
+       "14540000435w8hj8pXXwPQJJch.X9DBH8ya2Xenok55"
+      ]
+     }
+    },
+    "type": "object",
+    "required": [
+     "results",
+     "next_cursor"
+    ],
+    "title": "PaginatedList"
+   },
+   "PauseActivityEffect": {
+    "properties": {
+     "scope": {
+      "$ref": "#/components/schemas/EffectScope",
+      "description": "May be omitted, which means `all`."
+     }
+    },
+    "type": "object",
+    "title": "PauseActivityEffect"
+   },
+   "PauseNotificationsEffect": {
+    "properties": {
+     "scope": {
+      "$ref": "#/components/schemas/EffectScope",
+      "description": "May be omitted, which means `all`."
+     }
+    },
+    "type": "object",
+    "title": "PauseNotificationsEffect"
+   },
+   "PersonalProjectSyncView": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "title": "Id",
+      "description": "String ID of the project.",
+      "examples": [
+       "6XGgm6PHrGgMpCFX"
+      ]
+     },
+     "can_assign_tasks": {
+      "type": "boolean",
+      "title": "Can Assign Tasks",
+      "description": "Whether the current user can assign tasks in the project.",
+      "examples": [
+       true
+      ]
+     },
+     "can_comment": {
+      "type": "boolean",
+      "title": "Can Comment",
+      "description": "Whether the current user can comment in the project.",
+      "examples": [
+       true
+      ]
+     },
+     "child_order": {
+      "type": "integer",
+      "title": "Child Order",
+      "description": "Position of the project among sibling projects.",
+      "examples": [
+       1
+      ]
+     },
+     "order_key": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Order Key",
+      "description": "Fractional-indexing order key among sibling projects, or `null` until assigned (backfill in progress). Always `null` for workspace projects, which are ordered via folders instead.",
+      "examples": [
+       "a0"
+      ]
+     },
+     "is_collapsed": {
+      "type": "boolean",
+      "title": "Is Collapsed",
+      "description": "Whether the project is collapsed in the user's view.",
+      "examples": [
+       false
+      ]
+     },
+     "color": {
+      "type": "string",
+      "title": "Color",
+      "description": "Project color name.",
+      "examples": [
+       "charcoal"
+      ]
+     },
+     "icon": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Icon",
+      "description": "Project icon name, or `null` for the default icon. More icons will be added over time, so clients should fall back to the default icon for names they don't recognize.",
+      "examples": [
+       "lightbulb"
+      ]
+     },
+     "creator_uid": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Creator Uid",
+      "description": "String ID of the user who created the project.",
+      "examples": [
+       "1234567"
+      ]
+     },
+     "created_at": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "format": "date-time",
+      "title": "Created At",
+      "description": "Date and time when the project was created, or `null` if unknown.",
+      "examples": [
+       "2025-01-15T10:30:00Z"
+      ]
+     },
+     "is_archived": {
+      "type": "boolean",
+      "title": "Is Archived",
+      "description": "Whether the project is archived.",
+      "examples": [
+       false
+      ]
+     },
+     "is_deleted": {
+      "type": "boolean",
+      "title": "Is Deleted",
+      "description": "Whether the project is deleted.",
+      "examples": [
+       false
+      ]
+     },
+     "is_favorite": {
+      "type": "boolean",
+      "title": "Is Favorite",
+      "description": "Whether the project is marked as a favorite.",
+      "examples": [
+       false
+      ]
+     },
+     "is_frozen": {
+      "type": "boolean",
+      "title": "Is Frozen",
+      "description": "Whether the project is frozen and cannot be modified.",
+      "examples": [
+       false
+      ]
+     },
+     "name": {
+      "type": "string",
+      "title": "Name",
+      "description": "Project name.",
+      "examples": [
+       "Inbox"
+      ]
+     },
+     "is_shared": {
+      "type": "boolean",
+      "title": "Is Shared",
+      "description": "Whether the project is shared with other users.",
+      "examples": [
+       false
+      ]
+     },
+     "updated_at": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "format": "date-time",
+      "title": "Updated At",
+      "description": "Date and time when the project was last updated, or `null` if unknown.",
+      "examples": [
+       "2025-01-16T10:30:00Z"
+      ]
+     },
+     "view_style": {
+      "type": "string",
+      "title": "View Style",
+      "description": "Project view style.",
+      "examples": [
+       "list"
+      ]
+     },
+     "default_order": {
+      "type": "integer",
+      "title": "Default Order",
+      "description": "Default order of the project in team views.",
+      "examples": [
+       1
+      ]
+     },
+     "default_order_key": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Default Order Key",
+      "description": "Fractional-indexing key for the workspace's shared default-ordering scope (folders and workspace projects together). `null` for personal projects, and for workspace projects not yet assigned one (backfill pending).",
+      "examples": [
+       "a1V"
+      ]
+     },
+     "description": {
+      "type": "string",
+      "title": "Description",
+      "description": "Project description.",
+      "examples": [
+       "Tasks for the launch plan"
+      ]
+     },
+     "public_key": {
+      "type": "string",
+      "title": "Public Key",
+      "description": "Public access key for the project, or an empty string when public access is disabled.",
+      "examples": [
+       "550e8400-e29b-41d4-a716-446655440000"
+      ]
+     },
+     "access": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/ProjectAccessView"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "Project access configuration.",
+      "examples": [
+       null
+      ]
+     },
+     "role": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Role",
+      "description": "Current user's role in the project.",
+      "examples": [
+       "admin"
+      ]
+     },
+     "parent_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Parent Id",
+      "description": "String ID of the parent project, or `null` for root projects.",
+      "examples": [
+       "6XGgm6PHrGgMpCFX"
+      ]
+     },
+     "inbox_project": {
+      "type": "boolean",
+      "title": "Inbox Project",
+      "description": "Whether this project is the user's Inbox project.",
+      "examples": [
+       false
+      ]
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "can_assign_tasks",
+     "can_comment",
+     "child_order",
+     "order_key",
+     "is_collapsed",
+     "color",
+     "creator_uid",
+     "created_at",
+     "is_archived",
+     "is_deleted",
+     "is_favorite",
+     "is_frozen",
+     "name",
+     "is_shared",
+     "updated_at",
+     "view_style",
+     "default_order",
+     "default_order_key",
+     "description",
+     "public_key",
+     "access",
+     "role",
+     "parent_id",
+     "inbox_project"
+    ],
+    "title": "PersonalProjectSyncView",
+    "description": "A representation of a Personal Project Sync View, extending the base ProjectSync\nView, to be returned to clients in a sync (or sync-like) response."
+   },
+   "ProjectAccessView": {
+    "properties": {
+     "visibility": {
+      "$ref": "#/components/schemas/ProjectVisibility",
+      "description": "Project visibility level.",
+      "examples": [
+       "public"
+      ]
+     },
+     "configuration": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/RestrictedProjectConfiguration"
+       },
+       {
+        "$ref": "#/components/schemas/TeamProjectConfiguration"
+       },
+       {
+        "$ref": "#/components/schemas/PublicProjectConfiguration"
+       }
+      ],
+      "title": "Configuration",
+      "description": "Configuration for the selected visibility level.",
+      "examples": [
+       {}
+      ]
+     }
+    },
+    "type": "object",
+    "required": [
+     "visibility",
+     "configuration"
+    ],
+    "title": "ProjectAccessView",
+    "description": "Contains the details on who can view a project."
+   },
+   "ProjectStatus": {
+    "type": "string",
+    "enum": [
+     "PLANNED",
+     "IN_PROGRESS",
+     "PAUSED",
+     "COMPLETED",
+     "CANCELED"
+    ],
+    "title": "ProjectStatus",
+    "description": "Project status.\n\nAt the moment, this is for workspace projects only.",
+    "x-enumDescriptions": {
+     "CANCELED": "Canceled",
+     "COMPLETED": "Completed",
+     "IN_PROGRESS": "In Progress",
+     "PAUSED": "Paused",
+     "PLANNED": "Planned"
+    }
+   },
+   "ProjectVisibility": {
+    "type": "string",
+    "enum": [
+     "restricted",
+     "team",
+     "public"
+    ],
+    "title": "ProjectVisibility",
+    "description": "Indicates who can see a project",
+    "x-enumDescriptions": {
+     "public": "Public",
+     "restricted": "Restricted",
+     "team": "Team"
+    }
+   },
+   "PublicProjectConfiguration": {
+    "properties": {
+     "hide_collaborator_details": {
+      "type": "boolean",
+      "title": "Hide Collaborator Details",
+      "description": "Whether collaborator details are hidden on the public project.",
+      "examples": [
+       true
+      ]
+     },
+     "disable_duplication": {
+      "type": "boolean",
+      "title": "Disable Duplication",
+      "description": "Whether public project duplication is disabled.",
+      "examples": [
+       true
+      ]
+     }
+    },
+    "type": "object",
+    "required": [
+     "hide_collaborator_details",
+     "disable_duplication"
+    ],
+    "title": "PublicProjectConfiguration",
+    "description": "Configuration specific to public projects."
+   },
+   "RestrictedProjectConfiguration": {
+    "properties": {},
+    "type": "object",
+    "title": "RestrictedProjectConfiguration",
+    "description": "Configuration specific to restricted projects."
+   },
+   "SectionSyncView": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "title": "Id",
+      "description": "String ID of the section.",
+      "examples": [
+       "6fFPHV272WWh3gpW"
+      ]
+     },
+     "user_id": {
+      "type": "string",
+      "title": "User Id",
+      "description": "String ID of the user who owns the section.",
+      "examples": [
+       "1234567"
+      ]
+     },
+     "project_id": {
+      "type": "string",
+      "title": "Project Id",
+      "description": "String ID of the project that contains the section.",
+      "examples": [
+       "6XGgm6PHrGgMpCFX"
+      ]
+     },
+     "added_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Added At",
+      "description": "Date and time when the section was created.",
+      "examples": [
+       "2025-01-15T10:30:00Z"
+      ]
+     },
+     "updated_at": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "format": "date-time",
+      "title": "Updated At",
+      "description": "Date and time when the section was last updated, or `null` if unknown.",
+      "examples": [
+       "2025-01-16T10:30:00Z"
+      ]
+     },
+     "archived_at": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "format": "date-time",
+      "title": "Archived At",
+      "description": "Date and time when the section was archived, or `null` if it is active.",
+      "examples": [
+       "2025-01-17T10:30:00Z"
+      ]
+     },
+     "name": {
+      "type": "string",
+      "title": "Name",
+      "description": "Section name.",
+      "examples": [
+       "Groceries"
+      ]
+     },
+     "description": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Description",
+      "description": "Section description, or `null` if it has none.",
+      "examples": [
+       "Tasks for the launch plan"
+      ]
+     },
+     "section_order": {
+      "type": "integer",
+      "title": "Section Order",
+      "description": "Position of the section in the project.",
+      "examples": [
+       1
+      ]
+     },
+     "order_key": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Order Key",
+      "description": "Fractional-indexing order key: sections sort by comparing keys lexicographically within a project. May be `null` for projects not yet migrated.",
+      "examples": [
+       "a1V"
+      ]
+     },
+     "is_collapsed": {
+      "type": "boolean",
+      "title": "Is Collapsed",
+      "description": "Whether the section is collapsed in the user's view.",
+      "examples": [
+       false
+      ]
+     },
+     "is_archived": {
+      "type": "boolean",
+      "title": "Is Archived",
+      "description": "Whether the section is archived.",
+      "examples": [
+       false
+      ]
+     },
+     "is_deleted": {
+      "type": "boolean",
+      "title": "Is Deleted",
+      "description": "Whether the section is deleted.",
+      "examples": [
+       false
+      ]
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "user_id",
+     "project_id",
+     "added_at",
+     "updated_at",
+     "archived_at",
+     "name",
+     "description",
+     "section_order",
+     "order_key",
+     "is_collapsed",
+     "is_archived",
+     "is_deleted"
+    ],
+    "title": "SectionSyncView",
+    "description": "A class with fields representing a SectionView which will be returned\nto clients in a sync (or sync-like) response."
+   },
+   "TasksCompletedDateResponse": {
+    "properties": {
+     "items": {
+      "items": {
+       "$ref": "#/components/schemas/ItemSyncView"
+      },
+      "type": "array",
+      "title": "Items",
+      "description": "Completed tasks in the current page.",
+      "examples": [
+       [
+        {
+         "added_at": "2025-01-15T10:30:00Z",
+         "added_by_uid": "1234567",
+         "assigned_by_uid": "1234567",
+         "checked": false,
+         "child_order": 1,
+         "completed_at": "2025-01-16T10:30:00Z",
+         "completed_by_uid": "1234567",
+         "completed_count": 3,
+         "content": "Buy milk",
+         "day_order": 1,
+         "deadline": {
+          "date": "2025-02-12",
+          "lang": "en"
+         },
+         "description": "Pick up organic milk",
+         "due": {
+          "date": "2025-02-12",
+          "is_recurring": false,
+          "lang": "en",
+          "string": "tomorrow"
+         },
+         "duration": {
+          "amount": 30,
+          "unit": "minute"
+         },
+         "id": "6XGgmFVcrG5RRjVr",
+         "is_collapsed": false,
+         "is_deleted": false,
+         "labels": [
+          "priority"
+         ],
+         "note_count": 0,
+         "order_key": "a1V",
+         "parent_id": "6XGgmFVcrG5RRjVr",
+         "postponed_count": 1,
+         "priority": 1,
+         "project_id": "6XGgm6PHrGgMpCFX",
+         "responsible_uid": "1234567",
+         "section_id": "6fFPHV272WWh3gpW",
+         "updated_at": "2025-01-17T10:30:00Z",
+         "user_id": "1234567"
+        }
+       ]
+      ]
+     },
+     "next_cursor": {
+      "type": "string",
+      "title": "Next Cursor",
+      "description": "Cursor for the next page of completed tasks, when more results are available. Omitted when there is no next page.",
+      "examples": [
+       "14540000435w8hj8pXXwPQJJch.X9DBH8ya2Xenok55"
+      ]
+     }
+    },
+    "type": "object",
+    "title": "TasksCompletedDateResponse"
+   },
+   "TeamProjectConfiguration": {
+    "properties": {},
+    "type": "object",
+    "title": "TeamProjectConfiguration",
+    "description": "Configuration specific to team projects."
+   },
+   "ThemeAppearance": {
+    "type": "string",
+    "enum": [
+     "light",
+     "dark",
+     "system"
+    ],
+    "title": "ThemeAppearance",
+    "x-enumDescriptions": {
+     "dark": "Dark",
+     "light": "Light",
+     "system": "System"
+    }
+   },
+   "UrgentReminderDeviceView": {
+    "properties": {
+     "device_platform": {
+      "type": "string",
+      "enum": [
+       "ios",
+       "android"
+      ],
+      "title": "Device Platform",
+      "description": "Registered device platform.",
+      "examples": [
+       "ios"
+      ]
+     },
+     "device_id": {
+      "type": "string",
+      "title": "Device Id",
+      "description": "Registered device ID.",
+      "examples": [
+       "device-123"
+      ]
+     },
+     "device_token": {
+      "type": "string",
+      "title": "Device Token",
+      "description": "Registered device token.",
+      "examples": [
+       "token-123"
+      ]
+     },
+     "device_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Device Name",
+      "description": "Registered device name when available.",
+      "examples": [
+       "Maria's iPhone"
+      ]
+     }
+    },
+    "type": "object",
+    "required": [
+     "device_platform",
+     "device_id",
+     "device_token"
+    ],
+    "title": "UrgentReminderDeviceView"
+   },
+   "UserJSON": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "title": "Id",
+      "description": "User ID",
+      "examples": [
+       "1234567"
+      ]
+     },
+     "email": {
+      "type": "string",
+      "title": "Email",
+      "description": "User's email address",
+      "examples": [
+       "user@example.com"
+      ]
+     },
+     "full_name": {
+      "type": "string",
+      "title": "Full Name",
+      "description": "The user's real name formatted as Firstname Lastname",
+      "examples": [
+       "Maria Garcia"
+      ]
+     },
+     "has_password": {
+      "type": "boolean",
+      "title": "Has Password",
+      "description": "Whether the user has a password set on the account. It will be false if they have only authenticated without a password (e.g. using Google, Facebook, etc.)",
+      "examples": [
+       true
+      ]
+     },
+     "verification_status": {
+      "type": "string",
+      "enum": [
+       "unverified",
+       "verified",
+       "blocked",
+       "legacy"
+      ],
+      "title": "Verification Status",
+      "description": "User's email verification status. unverified (just signed up), verified (verified email or social login), blocked (failed to verify in 7 days), legacy (signed up before August 2022)",
+      "examples": [
+       "verified"
+      ]
+     },
+     "mfa_enabled": {
+      "type": "boolean",
+      "title": "Mfa Enabled",
+      "description": "Whether multi-factor authentication is enabled",
+      "examples": [
+       false
+      ]
+     },
+     "token": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Token",
+      "description": "The user's token that should be used to call the other API methods",
+      "examples": [
+       "0123456789abcdef0123456789abcdef01234567"
+      ]
+     },
+     "is_premium": {
+      "type": "boolean",
+      "title": "Is Premium",
+      "description": "Whether the user has a Todoist Pro subscription (a true or false value)",
+      "examples": [
+       true
+      ]
+     },
+     "premium_status": {
+      "anyOf": [
+       {
+        "type": "string",
+        "enum": [
+         "not_premium",
+         "current_personal_plan",
+         "legacy_personal_plan",
+         "teams_business_member"
+        ]
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Premium Status",
+      "description": "Outlines why a user is premium, possible values are: not_premium, current_personal_plan, legacy_personal_plan or teams_business_member",
+      "examples": [
+       "current_personal_plan"
+      ]
+     },
+     "premium_until": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Premium Until",
+      "description": "The date when the user's Todoist Pro subscription ends (null if not a Todoist Pro user). This should be used for informational purposes only as this does not include the grace period upon expiration",
+      "examples": [
+       "2025-12-31T23:59:59Z"
+      ]
+     },
+     "free_trial_expires": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Free Trial Expires",
+      "description": "Date when free trial expires (ISO 8601 format)",
+      "examples": [
+       "2025-03-01T00:00:00Z"
+      ]
+     },
+     "has_started_a_trial": {
+      "type": "boolean",
+      "title": "Has Started A Trial",
+      "description": "Whether the user has ever started a free trial",
+      "examples": [
+       true
+      ]
+     },
+     "joined_at": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Joined At",
+      "description": "Date when user joined Todoist (ISO 8601 format)",
+      "examples": [
+       "2025-01-15T10:30:00Z"
+      ]
+     },
+     "is_deleted": {
+      "type": "boolean",
+      "title": "Is Deleted",
+      "description": "Whether the user is deleted",
+      "default": false,
+      "examples": [
+       false
+      ]
+     },
+     "deleted_at": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Deleted At",
+      "description": "Date when user was deleted (ISO 8601 format)",
+      "examples": [
+       null
+      ]
+     },
+     "business_account_id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Business Account Id",
+      "description": "The ID of the user's business account",
+      "examples": [
+       null
+      ]
+     },
+     "date_format": {
+      "type": "integer",
+      "enum": [
+       0,
+       1
+      ],
+      "title": "Date Format",
+      "description": "Whether to use the DD-MM-YYYY date format (if set to 0), or the MM-DD-YYYY format (if set to 1)",
+      "examples": [
+       1
+      ]
+     },
+     "time_format": {
+      "anyOf": [
+       {
+        "type": "integer",
+        "enum": [
+         0,
+         1
+        ]
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Time Format",
+      "description": "Whether to use a 24h format such as 13:00 (if set to 0) when displaying time, or a 12h format such as 1:00pm (if set to 1)",
+      "examples": [
+       0
+      ]
+     },
+     "sort_order": {
+      "type": "integer",
+      "enum": [
+       0,
+       1
+      ],
+      "title": "Sort Order",
+      "description": "Whether to show projects in an oldest dates first order (if set to 0), or a oldest dates last order (if set to 1)",
+      "examples": [
+       0
+      ]
+     },
+     "theme_id": {
+      "type": "string",
+      "title": "Theme Id",
+      "description": "The currently selected Todoist theme (a number between 0 and 13)",
+      "examples": [
+       "todoist"
+      ]
+     },
+     "theme_appearance": {
+      "$ref": "#/components/schemas/ThemeAppearance",
+      "description": "Whether Todoist uses a light theme, a dark theme, or follows the system appearance",
+      "examples": [
+       "system"
+      ]
+     },
+     "start_day": {
+      "type": "integer",
+      "maximum": 7,
+      "minimum": 1,
+      "title": "Start Day",
+      "description": "The first day of the week (between 1 and 7, where 1 is Monday and 7 is Sunday)",
+      "examples": [
+       1
+      ]
+     },
+     "weekend_start_day": {
+      "type": "integer",
+      "maximum": 7,
+      "minimum": 1,
+      "title": "Weekend Start Day",
+      "description": "The day used when a user chooses to schedule a task for the 'Weekend' (between 1 and 7, where 1 is Monday and 7 is Sunday)",
+      "examples": [
+       6
+      ]
+     },
+     "next_week": {
+      "type": "integer",
+      "maximum": 7,
+      "minimum": 1,
+      "title": "Next Week",
+      "description": "The day of the next week, that tasks will be postponed to (between 1 and 7, where 1 is Monday and 7 is Sunday)",
+      "examples": [
+       1
+      ]
+     },
+     "auto_reminder": {
+      "type": "integer",
+      "title": "Auto Reminder",
+      "description": "The default time in minutes for the automatic reminders set, whenever a due date has been specified for a task",
+      "examples": [
+       30
+      ]
+     },
+     "urgent_reminder_device": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/UrgentReminderDeviceView"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "The device that should ring urgent reminders. Contains device_id, device_token, device_platform (ios or android), and optionally device_name.",
+      "examples": [
+       null
+      ]
+     },
+     "status": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/UserStatus"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "The user's status, shared across Todoist and Comms. `null` when the user has none or it has expired. Set or clear it with `user_update`.",
+      "examples": [
+       null
+      ]
+     },
+     "start_page": {
+      "type": "string",
+      "title": "Start Page",
+      "description": "The user's default view on Todoist. The start page can be one of the following: inbox, teaminbox, today, next7days, upcoming, assigned_to_me, project?id=1234 to open a project, label?name=abc to open a label, filter?id=1234 to open a filter, or workspace_filter?id=1234 to open a workspace filter",
+      "examples": [
+       "inbox"
+      ]
+     },
+     "inbox_project_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Inbox Project Id",
+      "description": "The ID of the user's Inbox project",
+      "examples": [
+       "6XGgm6PHrGgMpCFX"
+      ]
+     },
+     "lang": {
+      "type": "string",
+      "enum": [
+       "cs",
+       "da",
+       "de",
+       "en",
+       "es",
+       "fi",
+       "fr",
+       "it",
+       "ja",
+       "ko",
+       "nl",
+       "pl",
+       "pt_BR",
+       "ru",
+       "sv",
+       "tr",
+       "zh_CN",
+       "zh_TW"
+      ],
+      "title": "Lang",
+      "description": "The user's language",
+      "examples": [
+       "en"
+      ]
+     },
+     "tz_info": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Tz Info",
+      "description": "The user's timezone (a dictionary structure), which includes the following elements: the timezone as a string value, the hours and minutes difference from GMT, whether daylight saving time applies denoted by is_dst, and a string value of the time difference from GMT that is gmt_string",
+      "examples": [
+       {
+        "gmt_string": "+01:00",
+        "is_dst": false,
+        "timezone": "Europe/Madrid"
+       }
+      ]
+     },
+     "karma": {
+      "type": "number",
+      "title": "Karma",
+      "description": "The user's karma score",
+      "examples": [
+       1024
+      ]
+     },
+     "karma_trend": {
+      "anyOf": [
+       {
+        "type": "string",
+        "enum": [
+         "up",
+         "down",
+         "-"
+        ]
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Karma Trend",
+      "description": "The user's karma trend. Can be 'up', 'down', or '-' (no change)",
+      "examples": [
+       "up"
+      ]
+     },
+     "daily_goal": {
+      "type": "integer",
+      "title": "Daily Goal",
+      "description": "The daily goal number of completed tasks for karma",
+      "examples": [
+       5
+      ]
+     },
+     "weekly_goal": {
+      "type": "integer",
+      "title": "Weekly Goal",
+      "description": "The target number of tasks to complete per week",
+      "examples": [
+       25
+      ]
+     },
+     "days_off": {
+      "items": {
+       "type": "integer"
+      },
+      "type": "array",
+      "title": "Days Off",
+      "description": "Array of integers representing user's days off (between 1 and 7, where 1 is Monday and 7 is Sunday)",
+      "examples": [
+       [
+        6,
+        7
+       ]
+      ]
+     },
+     "is_celebrations_enabled": {
+      "type": "boolean",
+      "title": "Is Celebrations Enabled",
+      "description": "Whether celebration animations are enabled",
+      "examples": [
+       true
+      ]
+     },
+     "completed_count": {
+      "type": "integer",
+      "title": "Completed Count",
+      "description": "Total number of tasks completed by user",
+      "examples": [
+       42
+      ]
+     },
+     "completed_today": {
+      "type": "integer",
+      "title": "Completed Today",
+      "description": "Number of tasks completed today by the user",
+      "examples": [
+       3
+      ]
+     },
+     "share_limit": {
+      "type": "integer",
+      "title": "Share Limit",
+      "description": "Maximum number of collaborators allowed in shared projects",
+      "examples": [
+       5
+      ]
+     },
+     "features": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Features",
+      "description": "Feature flags and settings for the user",
+      "examples": [
+       {
+        "webhooks": true
+       }
+      ]
+     },
+     "feature_identifier": {
+      "type": "string",
+      "title": "Feature Identifier",
+      "description": "Feature identifier for feature flag evaluations",
+      "examples": [
+       "1234567"
+      ]
+     },
+     "joinable_workspace": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Joinable Workspace",
+      "description": "Information about workspaces the user can join",
+      "examples": [
+       null
+      ]
+     },
+     "onboarding_completed": {
+      "type": "boolean",
+      "title": "Onboarding Completed",
+      "description": "Whether the user has completed onboarding",
+      "examples": [
+       true
+      ]
+     },
+     "onboarding_initiated": {
+      "type": "boolean",
+      "title": "Onboarding Initiated",
+      "description": "Whether the user has initiated onboarding",
+      "examples": [
+       true
+      ]
+     },
+     "onboarding_started": {
+      "type": "boolean",
+      "title": "Onboarding Started",
+      "description": "Whether the user has started onboarding",
+      "examples": [
+       true
+      ]
+     },
+     "onboarding_level": {
+      "anyOf": [
+       {
+        "type": "string",
+        "enum": [
+         "beginner",
+         "intermediate",
+         "pro"
+        ]
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Onboarding Level",
+      "description": "User's self-reported skill level during onboarding",
+      "examples": [
+       "intermediate"
+      ]
+     },
+     "onboarding_persona": {
+      "anyOf": [
+       {
+        "type": "string",
+        "enum": [
+         "analog",
+         "tasks",
+         "calendar",
+         "organic"
+        ]
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Onboarding Persona",
+      "description": "User's onboarding persona selection",
+      "examples": [
+       "tasks"
+      ]
+     },
+     "onboarding_role": {
+      "anyOf": [
+       {
+        "type": "string",
+        "enum": [
+         "leader",
+         "founder",
+         "ic"
+        ]
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Onboarding Role",
+      "description": "User's role selection during onboarding",
+      "examples": [
+       "ic"
+      ]
+     },
+     "onboarding_team_mode": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Onboarding Team Mode",
+      "description": "Whether user selected team mode during onboarding",
+      "examples": [
+       "solo"
+      ]
+     },
+     "onboarding_use_cases": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string",
+         "enum": [
+          "personal",
+          "work",
+          "education",
+          "teamwork",
+          "solo",
+          "teamcreator",
+          "simple",
+          "teamjoiner"
+         ]
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Onboarding Use Cases",
+      "description": "Use cases the user selected during onboarding",
+      "examples": [
+       [
+        "work"
+       ]
+      ]
+     },
+     "getting_started_guide_projects": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Getting Started Guide Projects",
+      "description": "List of project IDs for getting started guide",
+      "examples": [
+       [
+        "6XGgm6PHrGgMpCFX"
+       ]
+      ]
+     },
+     "onboarded_dated_tasks_created": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Onboarded Dated Tasks Created",
+      "description": "True once the user has created at least 1 task with a due date that includes a time component (excluding auto-seeded getting-started-guide tasks).",
+      "examples": [
+       true
+      ]
+     },
+     "onboarded_tasks_completed": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Onboarded Tasks Completed",
+      "description": "True once the user has completed at least 3 tasks.",
+      "examples": [
+       true
+      ]
+     },
+     "onboarded_mobile_accessed": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Onboarded Mobile Accessed",
+      "description": "True once the user has synced from iOS or Android.",
+      "examples": [
+       true
+      ]
+     },
+     "onboarded_desktop_accessed": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Onboarded Desktop Accessed",
+      "description": "True once the user has synced from Web, macOS, or Windows.",
+      "examples": [
+       true
+      ]
+     },
+     "is_onboarded": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Is Onboarded",
+      "description": "Composite flag: true once all four onboarded_* criteria above are met.",
+      "examples": [
+       true
+      ]
+     },
+     "activated_user": {
+      "type": "boolean",
+      "title": "Activated User",
+      "description": "Whether the user is considered activated (completed key onboarding actions)",
+      "examples": [
+       true
+      ]
+     },
+     "has_magic_number": {
+      "type": "boolean",
+      "title": "Has Magic Number",
+      "description": "Whether the user has reached a magic number milestone",
+      "examples": [
+       false
+      ]
+     },
+     "image_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Image Id",
+      "description": "The ID of the user's avatar",
+      "examples": [
+       "abc123"
+      ]
+     },
+     "avatar_big": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Avatar Big",
+      "description": "The link to a 195x195 pixels image of the user's avatar",
+      "examples": [
+       "https://dcff1xvirvpfp.cloudfront.net/avatar_big.jpg"
+      ]
+     },
+     "avatar_medium": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Avatar Medium",
+      "description": "The link to a 60x60 pixels image of the user's avatar",
+      "examples": [
+       "https://dcff1xvirvpfp.cloudfront.net/avatar_medium.jpg"
+      ]
+     },
+     "avatar_s640": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Avatar S640",
+      "description": "The link to a 640x640 pixels image of the user's avatar",
+      "examples": [
+       "https://dcff1xvirvpfp.cloudfront.net/avatar_s640.jpg"
+      ]
+     },
+     "avatar_small": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Avatar Small",
+      "description": "The link to a 35x35 pixels image of the user's avatar",
+      "examples": [
+       "https://dcff1xvirvpfp.cloudfront.net/avatar_small.jpg"
+      ]
+     },
+     "websocket_url": {
+      "type": "string",
+      "title": "Websocket Url",
+      "description": "WebSocket URL for real-time updates",
+      "examples": [
+       "wss://ws.todoist.com/ws?token=0123456789abcdef"
+      ]
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "email",
+     "full_name",
+     "has_password",
+     "verification_status",
+     "mfa_enabled",
+     "is_premium",
+     "has_started_a_trial",
+     "date_format",
+     "sort_order",
+     "theme_id",
+     "theme_appearance",
+     "start_day",
+     "weekend_start_day",
+     "next_week",
+     "auto_reminder",
+     "start_page",
+     "lang",
+     "tz_info",
+     "karma",
+     "daily_goal",
+     "weekly_goal",
+     "days_off",
+     "is_celebrations_enabled",
+     "completed_count",
+     "completed_today",
+     "share_limit",
+     "features",
+     "feature_identifier",
+     "joinable_workspace",
+     "onboarding_completed",
+     "onboarding_initiated",
+     "onboarding_started",
+     "activated_user",
+     "has_magic_number",
+     "websocket_url"
+    ],
+    "title": "UserSyncView",
+    "description": "A model for the user objects returned by the sync/REST API.\n\nThis model is used purely for OpenAPI documentation generation and does not\nhandle actual serialization (which is handled by @todoist.models.json.user.generate)."
+   },
+   "UserStatus": {
+    "properties": {
+     "message": {
+      "type": "string",
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Message",
+      "description": "The status text. Surrounding whitespace is trimmed.",
+      "examples": [
+       "On holiday"
+      ]
+     },
+     "emoji": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Emoji",
+      "description": "An optional single emoji.",
+      "examples": [
+       "⛱️"
+      ]
+     },
+     "active_until": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "date-time"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Active Until",
+      "description": "When the status and its effects expire, in UTC. `null` or omitted means it stays until cleared.",
+      "examples": [
+       "2026-09-08T15:00:00Z"
+      ]
+     },
+     "effects": {
+      "$ref": "#/components/schemas/UserStatusEffects"
+     }
+    },
+    "type": "object",
+    "required": [
+     "message"
+    ],
+    "title": "UserStatus",
+    "description": "A user's status, as sent by clients and stored in the `status` user property."
+   },
+   "UserStatusEffects": {
+    "properties": {
+     "pause_notifications": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/PauseNotificationsEffect"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "Pauses the user's notifications, in products that support it, while the status is active."
+     },
+     "pause_activity": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/PauseActivityEffect"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "Pauses the user's productivity metrics (Karma and streaks) in Todoist while the status is active, as Vacation Mode does."
+     }
+    },
+    "type": "object",
+    "title": "UserStatusEffects",
+    "description": "The optional behaviors a status enables. Empty for an informational status.\nEach effect is independent: a status may carry either, both, or neither."
+   },
+   "WorkspaceProjectSyncView": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "title": "Id",
+      "description": "String ID of the project.",
+      "examples": [
+       "6XGgm6PHrGgMpCFX"
+      ]
+     },
+     "can_assign_tasks": {
+      "type": "boolean",
+      "title": "Can Assign Tasks",
+      "description": "Whether the current user can assign tasks in the project.",
+      "examples": [
+       true
+      ]
+     },
+     "can_comment": {
+      "type": "boolean",
+      "title": "Can Comment",
+      "description": "Whether the current user can comment in the project.",
+      "examples": [
+       true
+      ]
+     },
+     "child_order": {
+      "type": "integer",
+      "title": "Child Order",
+      "description": "Position of the project among sibling projects.",
+      "examples": [
+       1
+      ]
+     },
+     "order_key": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Order Key",
+      "description": "Fractional-indexing order key among sibling projects, or `null` until assigned (backfill in progress). Always `null` for workspace projects, which are ordered via folders instead.",
+      "examples": [
+       "a0"
+      ]
+     },
+     "is_collapsed": {
+      "type": "boolean",
+      "title": "Is Collapsed",
+      "description": "Whether the project is collapsed in the user's view.",
+      "examples": [
+       false
+      ]
+     },
+     "color": {
+      "type": "string",
+      "title": "Color",
+      "description": "Project color name.",
+      "examples": [
+       "charcoal"
+      ]
+     },
+     "icon": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Icon",
+      "description": "Project icon name, or `null` for the default icon. More icons will be added over time, so clients should fall back to the default icon for names they don't recognize.",
+      "examples": [
+       "lightbulb"
+      ]
+     },
+     "creator_uid": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Creator Uid",
+      "description": "String ID of the user who created the project.",
+      "examples": [
+       "1234567"
+      ]
+     },
+     "created_at": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "format": "date-time",
+      "title": "Created At",
+      "description": "Date and time when the project was created, or `null` if unknown.",
+      "examples": [
+       "2025-01-15T10:30:00Z"
+      ]
+     },
+     "is_archived": {
+      "type": "boolean",
+      "title": "Is Archived",
+      "description": "Whether the project is archived.",
+      "examples": [
+       false
+      ]
+     },
+     "is_deleted": {
+      "type": "boolean",
+      "title": "Is Deleted",
+      "description": "Whether the project is deleted.",
+      "examples": [
+       false
+      ]
+     },
+     "is_favorite": {
+      "type": "boolean",
+      "title": "Is Favorite",
+      "description": "Whether the project is marked as a favorite.",
+      "examples": [
+       false
+      ]
+     },
+     "is_frozen": {
+      "type": "boolean",
+      "title": "Is Frozen",
+      "description": "Whether the project is frozen and cannot be modified.",
+      "examples": [
+       false
+      ]
+     },
+     "name": {
+      "type": "string",
+      "title": "Name",
+      "description": "Project name.",
+      "examples": [
+       "Inbox"
+      ]
+     },
+     "is_shared": {
+      "type": "boolean",
+      "title": "Is Shared",
+      "description": "Whether the project is shared with other users.",
+      "examples": [
+       false
+      ]
+     },
+     "updated_at": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "format": "date-time",
+      "title": "Updated At",
+      "description": "Date and time when the project was last updated, or `null` if unknown.",
+      "examples": [
+       "2025-01-16T10:30:00Z"
+      ]
+     },
+     "view_style": {
+      "type": "string",
+      "title": "View Style",
+      "description": "Project view style.",
+      "examples": [
+       "list"
+      ]
+     },
+     "default_order": {
+      "type": "integer",
+      "title": "Default Order",
+      "description": "Default order of the project in team views.",
+      "examples": [
+       1
+      ]
+     },
+     "default_order_key": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Default Order Key",
+      "description": "Fractional-indexing key for the workspace's shared default-ordering scope (folders and workspace projects together). `null` for personal projects, and for workspace projects not yet assigned one (backfill pending).",
+      "examples": [
+       "a1V"
+      ]
+     },
+     "description": {
+      "type": "string",
+      "title": "Description",
+      "description": "Project description.",
+      "examples": [
+       "Tasks for the launch plan"
+      ]
+     },
+     "public_key": {
+      "type": "string",
+      "title": "Public Key",
+      "description": "Public access key for the project, or an empty string when public access is disabled.",
+      "examples": [
+       "550e8400-e29b-41d4-a716-446655440000"
+      ]
+     },
+     "access": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/ProjectAccessView"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "Project access configuration.",
+      "examples": [
+       null
+      ]
+     },
+     "role": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Role",
+      "description": "Current user's role in the project.",
+      "examples": [
+       "admin"
+      ]
+     },
+     "collaborator_role_default": {
+      "type": "string",
+      "title": "Collaborator Role Default",
+      "description": "Default collaborator role for the workspace project.",
+      "examples": [
+       "member"
+      ]
+     },
+     "folder_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Folder Id",
+      "description": "String ID of the folder that contains the project, or `null`.",
+      "examples": [
+       "1234"
+      ]
+     },
+     "is_invite_only": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Is Invite Only",
+      "description": "Whether joining the workspace project requires an invitation.",
+      "examples": [
+       false
+      ]
+     },
+     "is_link_sharing_enabled": {
+      "type": "boolean",
+      "title": "Is Link Sharing Enabled",
+      "description": "Whether invitation links are enabled for the project.",
+      "examples": [
+       false
+      ]
+     },
+     "status": {
+      "$ref": "#/components/schemas/ProjectStatus",
+      "description": "Project status.",
+      "examples": [
+       "in_progress"
+      ]
+     },
+     "workspace_id": {
+      "type": "string",
+      "title": "Workspace Id",
+      "description": "String ID of the workspace that contains the project.",
+      "examples": [
+       "123456"
+      ]
+     },
+     "is_pending_default_collaborator_invites": {
+      "type": "boolean",
+      "title": "Is Pending Default Collaborator Invites",
+      "description": "Whether default collaborator invitations are still being created in the background.",
+      "examples": [
+       false
+      ]
+     },
+     "is_project_insights_enabled": {
+      "type": "boolean",
+      "title": "Is Project Insights Enabled",
+      "description": "Whether project insights are enabled for the project.",
+      "examples": [
+       true
+      ]
+     },
+     "parent_id": {
+      "type": "null",
+      "title": "Parent Id",
+      "description": "Always null for workspace projects."
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "can_assign_tasks",
+     "can_comment",
+     "child_order",
+     "order_key",
+     "is_collapsed",
+     "color",
+     "creator_uid",
+     "created_at",
+     "is_archived",
+     "is_deleted",
+     "is_favorite",
+     "is_frozen",
+     "name",
+     "is_shared",
+     "updated_at",
+     "view_style",
+     "default_order",
+     "default_order_key",
+     "description",
+     "public_key",
+     "access",
+     "role",
+     "collaborator_role_default",
+     "folder_id",
+     "is_invite_only",
+     "is_link_sharing_enabled",
+     "status",
+     "workspace_id",
+     "is_pending_default_collaborator_invites",
+     "is_project_insights_enabled"
+    ],
+    "title": "WorkspaceProjectSyncView",
+    "description": "A representation of a Workspace Project Sync View, extending the base ProjectSync\nView, to be returned to clients in a sync (or sync-like) response."
+   }
+  }
+ }
+}

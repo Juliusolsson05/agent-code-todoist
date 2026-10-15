@@ -1,0 +1,33 @@
+name: Check
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      # --include=dev: the build and tests need vite/esbuild even if a runner
+      # exports NODE_ENV=production (npm would silently omit devDependencies).
+      - run: npm ci --include=dev
+      - run: npm run typecheck
+      - run: npm test
+      # Real td 5.4.10 against the fake Todoist API (needs openssl, present on
+      # ubuntu-latest, for the throwaway interception CA).
+      - run: npm run test:integration
+      # The views in Chromium against the same real runtime → service → td →
+      # fake API (uitests/). Only the headless shell is needed.
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:ui
+      # Rebuilds dist/ and runs the install contract against it, then fails if
+      # the committed bundle differs from what this commit's source produces —
+      # Agent Code installs the COMMITTED dist, so a stale one ships stale code.
+      - run: npm run test:extension
+      - run: git diff --exit-code -- dist dist-service

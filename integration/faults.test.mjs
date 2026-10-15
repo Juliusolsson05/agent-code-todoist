@@ -1,0 +1,203 @@
+import assert from 'node:assert/strict'
+import { after, before, test } from 'node:test'
+
+import * as h from '../server/handlers.ts'
+import { INVOKE_BUDGET_MS, withinBudget } from '../server/handlers.ts'
+import { invoke } from '../server/invoke.ts'
+import { tdErrorCode, tdErrorMessage } from '../src/shared/types.ts'
+import { seed } from '../tests/support/scenario.mjs'
+import { startWorld } from '../tests/support/world.mjs'
+
+// What the user sees when Todoist, the network or the token misbehave. Each
+// scenario injects the fault at the API (the real td handles it as it would in
+// production) and asserts the error class our UI branches on — and that no
+// failure leaves state half-changed or hangs past the host's 30 s kill.
+
+let world
+let s
+before(async () => {
+  world = await startWorld()
+  s = seed(world.fake)
+})
+after(() => world.close())
+
+const code = async promise => {
+  try {
+    await promise
+    return 'resolved'
+  } catch (error) {
+    return tdErrorCode(error) ?? `untyped: ${error.message}`
+  }
+}
+
+test('a revoked token puts setup back to signed-out with td’s explanation', async () => {
+  world.fake.token = 'rotated-elsewhere'
+  try {
+    assert.equal(await code(h.list({ kind: 'today' })), 'AUTH')
+    const setup = await world.relocate()
+    assert.equal(setup.state, 'signed-out')
+    assert.match(setup.error, /401|Unauthorized|token/i)
+  } finally {
+    world.fake.token = (await import('../tests/support/fakeTodoist.mjs')).TOKEN
+    await world.relocate()
+  }
+})
+
+test('a persistent rate limit fails clearly and inside our deadline', async () => {
+  world.fake.fail(r => r.path === '/api/v1/tasks/filter', { status: 429, body: { error: 'Too many requests', error_code: 35, http_code: 429 }, times: Infinity })
+  const started = Date.now()
+  try {
+    const result = await code(h.list({ kind: 'today' }))
+    assert.ok(['TD_FAILED', 'TIMEOUT'].includes(result), result)
+    assert.ok(Date.now() - started < 25_000, 'never reaches the host’s 30 s service kill')
+  } finally {
+    world.fake.faults.length = 0
+  }
+})
+
+test('a transient 5xx on a read is absorbed by the service’s one read retry', async () => {
+  world.fake.fail(r => r.path === '/api/v1/projects', { status: 503, times: 1 })
+  const meta = await h.meta({})
+  assert.ok(meta.projects.length > 0)
+  assert.ok(world.fake.requestsTo('GET', '/api/v1/projects').length >= 2, 'the read was retried')
+})
+
+test('a failing complete leaves the task open and reports the failure', async () => {
+  const id = s.t.tomorrow.id
+  world.fake.fail(r => r.path === `/api/v1/tasks/${id}/close`, { status: 500, times: Infinity })
+  try {
+    const before = world.fake.requestsTo('POST', `/api/v1/tasks/${id}/close`).length
+    assert.notEqual(await code(h.complete({ id })), 'resolved')
+    assert.equal(world.fake.tasks.find(t => t.id === id).checked, false)
+    assert.equal(world.fake.requestsTo('POST', `/api/v1/tasks/${id}/close`).length - before, 1, 'a failed write is never replayed')
+  } finally {
+    world.fake.faults.length = 0
+  }
+  assert.equal(await code(h.complete({ id })), 'resolved', 'works again once the server recovers')
+  await h.uncomplete({ id })
+})
+
+test('a close answered 204 with no body (the pre-spec shape) still completes', async () => {
+  // The spec says 200 + `{}`; the fake answers that by default. Todoist's
+  // REST v2 answered 204, and the SDK accepts any 2xx with an empty body —
+  // both shapes must keep working whichever the live API sends.
+  const id = s.t.nextWeek.id
+  world.fake.fail(r => r.path === `/api/v1/tasks/${id}/close`, { status: 204, body: undefined, times: 1 })
+  assert.equal(await code(h.complete({ id })), 'resolved')
+  await h.uncomplete({ id })
+})
+
+test('a slow failing read cannot outlive the host’s 30 s: retry only within the request deadline', { timeout: 45_000 }, async () => {
+  // Review of PR #2: 16 s to fail + 400 ms + a fresh 16 s = 34.6 s > 30 s.
+  world.fake.fail(r => r.path === '/api/v1/tasks/filter', { status: 503, body: { error: 'busy' }, delayMs: 16_000, times: 2 })
+  const started = Date.now()
+  try {
+    const result = await code(invoke('list', { kind: 'today' }))
+    const elapsed = Date.now() - started
+    assert.ok(['TD_FAILED', 'TIMEOUT'].includes(result), result)
+    assert.ok(elapsed < INVOKE_BUDGET_MS + 1_500, `answered after ${elapsed} ms`)
+  } finally {
+    world.fake.faults.length = 0
+  }
+})
+
+test('a hanging API is cut at the REQUEST deadline, not at a fixed 20 s', { timeout: 30_000 }, async () => {
+  world.fake.fail(r => r.path === '/api/v1/tasks/filter', { status: 200, body: { results: [], next_cursor: null }, delayMs: 10_000, times: 1 })
+  const started = Date.now()
+  try {
+    assert.equal(await code(withinBudget(() => h.list({ kind: 'today' }), 3_000)), 'TIMEOUT')
+    assert.ok(Date.now() - started < 4_500, `cut near the 3 s budget (${Date.now() - started} ms)`)
+  } finally {
+    world.fake.faults.length = 0
+  }
+})
+
+test('a slow 5xx is not retried when the request has no time left; a fast one is', { timeout: 30_000 }, async () => {
+  const filter = () => world.fake.requestsTo('GET', '/api/v1/tasks/filter').length
+  world.fake.fail(r => r.path === '/api/v1/tasks/filter', { status: 503, body: { error: 'busy' }, delayMs: 2_000, times: 2 })
+  let before = filter()
+  try {
+    assert.equal(await code(withinBudget(() => h.list({ kind: 'today' }), 6_000)), 'TD_FAILED')
+    assert.equal(filter() - before, 1, 'only ~4 s were left: below the 5 s a retry needs')
+  } finally {
+    world.fake.faults.length = 0
+  }
+  world.fake.fail(r => r.path === '/api/v1/tasks/filter', { status: 503, body: { error: 'busy' }, times: 1 })
+  before = filter()
+  assert.equal(await code(withinBudget(() => h.list({ kind: 'today' }), 20_000)), 'resolved')
+  assert.equal(filter() - before, 2, 'retried once and succeeded')
+})
+
+test('a 404 for a task deleted elsewhere is an error, not a crash', async () => {
+  assert.notEqual(await code(h.task({ id: 'gone12345' })), 'resolved')
+})
+
+test('a malformed API response becomes a typed error', async () => {
+  world.fake.fail(r => r.path === '/api/v1/labels', { status: 200, body: '<html>proxy error page</html>', times: 1 })
+  // meta tolerates a failed label call (labels are optional decoration) —
+  // the sidebar must still load.
+  const meta = await h.meta({})
+  assert.ok(meta.projects.length > 0)
+  // Only a Todoist 5xx is retried; a malformed 200 is not, so one fault
+  // reaches the caller. Cleared in `finally` either way: a leftover fault once
+  // made the next test's "hang" resolve in 13 ms and pass for the wrong reason.
+  world.fake.fail(r => r.path === '/api/v1/tasks/filter', { status: 200, body: { results: 'not-a-list' }, times: 1 })
+  try {
+    const result = await code(h.list({ kind: 'today' }))
+    assert.ok(['TD_FAILED', 'BAD_OUTPUT'].includes(result), result)
+  } finally {
+    world.fake.faults.length = 0
+  }
+})
+
+test('fields the API adds later are ignored and missing optional ones are tolerated', async () => {
+  const future = world.fake.addTask({
+    content: 'From a newer API',
+    project_id: s.home.id,
+    some_future_field: { nested: [1, 2, 3] },
+    ai_summary: 'new thing',
+  })
+  // Only fields the SDK treats as optional may go missing; dropping a field
+  // the SDK requires (updated_at, checked …) breaks td itself, which is
+  // Doist's contract, not something this extension can absorb.
+  delete future.order_key
+  delete future.completed_by_uid
+  const row = (await h.list({ kind: 'project', id: s.home.id })).tasks.find(t => t.id === future.id)
+  assert.equal(row.content, 'From a newer API')
+  assert.ok(!('some_future_field' in row) && !('someFutureField' in row), 'unknown fields never reach the bridge')
+})
+
+test('a hanging API is cut at our 20 s deadline, before the host kills the service', { timeout: 40_000 }, async () => {
+  world.fake.fail(r => r.path === '/api/v1/tasks/filter', { status: 200, body: { results: [], next_cursor: null }, delayMs: 26_000, times: 1 })
+  const started = Date.now()
+  try {
+    const result = await code(h.list({ kind: 'today' }))
+    const elapsed = Date.now() - started
+    assert.equal(result, 'TIMEOUT')
+    assert.ok(elapsed > 15_000 && elapsed < 25_000, `cut at our 20 s cap (${elapsed} ms)`)
+  } finally {
+    world.fake.faults.length = 0
+  }
+})
+
+test('no fault scenario reached an endpoint the fake does not model', () => {
+  assert.deepEqual(world.fake.unhandled, [])
+})
+
+test('the network disappearing mid-session is a typed failure, not a hang', { timeout: 40_000 }, async () => {
+  await world.interceptor.close() // last: the world is unusable afterwards
+  const started = Date.now()
+  const result = await code(h.list({ kind: 'today' }))
+  assert.ok(['TD_FAILED', 'TIMEOUT'].includes(result), result)
+  assert.ok(Date.now() - started < 25_000)
+  world.interceptor.close = async () => {}
+})
+
+test('error messages shown to the user never contain the API token', async () => {
+  world.fake.token = 'another'
+  try {
+    await h.list({ kind: 'today' })
+  } catch (error) {
+    assert.ok(!tdErrorMessage(error).includes((await import('../tests/support/fakeTodoist.mjs')).TOKEN))
+  }
+})

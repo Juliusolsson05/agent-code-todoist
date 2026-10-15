@@ -1,0 +1,1265 @@
+{
+  "td": "5.4.10",
+  "spec": {
+    "sha256": "a763d4d454977d48f134a68d6a7a0fcc4860712c8ef04766b4931120628d8b3c"
+  },
+  "transcript": [
+    {
+      "operation": "meta",
+      "params": {},
+      "api": [
+        {
+          "method": "GET",
+          "path": "/api/v1/labels",
+          "query": {
+            "limit": "200"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/projects",
+          "query": {
+            "limit": "200"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/sync",
+          "body": {
+            "resource_types": [
+              "filters"
+            ],
+            "sync_token": "*"
+          }
+        }
+      ],
+      "result": {
+        "ok": {
+          "projects": [
+            {
+              "id": "p000001",
+              "name": "Inbox",
+              "color": "charcoal",
+              "parentId": null,
+              "order": 0,
+              "isFavorite": false,
+              "isInbox": true,
+              "isShared": false,
+              "viewStyle": "list",
+              "url": "https://app.todoist.com/app/project/inbox-p000001"
+            },
+            {
+              "id": "p000002",
+              "name": "Work",
+              "color": "blue",
+              "parentId": null,
+              "order": 1,
+              "isFavorite": true,
+              "isInbox": false,
+              "isShared": false,
+              "viewStyle": "list",
+              "url": "https://app.todoist.com/app/project/work-p000002"
+            },
+            {
+              "id": "p000003",
+              "name": "Client A",
+              "color": "berry_red",
+              "parentId": "p000002",
+              "order": 1,
+              "isFavorite": false,
+              "isInbox": false,
+              "isShared": false,
+              "viewStyle": "list",
+              "url": "https://app.todoist.com/app/project/client-a-p000003"
+            },
+            {
+              "id": "p000004",
+              "name": "Home",
+              "color": "lime_green",
+              "parentId": null,
+              "order": 2,
+              "isFavorite": false,
+              "isInbox": false,
+              "isShared": false,
+              "viewStyle": "list",
+              "url": "https://app.todoist.com/app/project/home-p000004"
+            }
+          ],
+          "sections": [],
+          "labels": [
+            {
+              "id": "l000007",
+              "name": "review",
+              "color": "violet",
+              "isFavorite": true,
+              "order": 1
+            },
+            {
+              "id": "l000008",
+              "name": "deep-work",
+              "color": "teal",
+              "isFavorite": false,
+              "order": 2
+            }
+          ],
+          "filters": [
+            {
+              "id": "f000009",
+              "name": "Urgent",
+              "query": "p1",
+              "color": "red",
+              "isFavorite": false
+            }
+          ],
+          "user": {
+            "id": "u-1",
+            "email": "tester@example.com",
+            "fullName": "Test User",
+            "readOnly": false
+          }
+        }
+      }
+    },
+    {
+      "operation": "sections",
+      "params": {
+        "projectId": "p000002"
+      },
+      "api": [
+        {
+          "method": "GET",
+          "path": "/api/v1/sections",
+          "query": {
+            "project_id": "p000002",
+            "limit": "200"
+          }
+        }
+      ],
+      "result": {
+        "ok": [
+          {
+            "id": "s000005",
+            "projectId": "p000002",
+            "name": "Doing",
+            "order": 1
+          },
+          {
+            "id": "s000006",
+            "projectId": "p000002",
+            "name": "Review",
+            "order": 2
+          }
+        ]
+      }
+    },
+    {
+      "operation": "list",
+      "params": {
+        "kind": "today"
+      },
+      "api": [
+        {
+          "method": "GET",
+          "path": "/api/v1/tasks/filter",
+          "query": {
+            "query": "(today | overdue) & (assigned to: me | !assigned)",
+            "limit": "120"
+          }
+        }
+      ],
+      "result": {
+        "ok": {
+          "tasks": [
+            {
+              "id": "t00000a",
+              "content": "Overdue invoice",
+              "description": "",
+              "priority": 3,
+              "due": {
+                "date": "<day-2>",
+                "datetime": null,
+                "string": "Oct 12",
+                "recurring": false
+              },
+              "deadline": null,
+              "duration": null,
+              "projectId": "p000002",
+              "sectionId": "s000006",
+              "parentId": null,
+              "labels": [],
+              "order": 1,
+              "commentCount": 0,
+              "completedAt": null,
+              "url": "https://app.todoist.com/app/task/overdue-invoice-t00000a"
+            },
+            {
+              "id": "t00000b",
+              "content": "Review **PR #12** — https://github.com/acme/repo/pull/12",
+              "description": "Check the rollback path.\n\n- step one\n- step two",
+              "priority": 4,
+              "due": {
+                "date": "<day+0>",
+                "datetime": null,
+                "string": "today",
+                "recurring": false
+              },
+              "deadline": "<day+3>",
+              "duration": {
+                "amount": 45,
+                "unit": "minute"
+              },
+              "projectId": "p000002",
+              "sectionId": "s000005",
+              "parentId": null,
+              "labels": [
+                "review"
+              ],
+              "order": 2,
+              "commentCount": 0,
+              "completedAt": null,
+              "url": "https://app.todoist.com/app/task/review-pr-12-https-github-com-acme-repo-pull-12-t00000b"
+            },
+            {
+              "id": "t00000c",
+              "content": "Stand-up",
+              "description": "",
+              "priority": 1,
+              "due": {
+                "date": "<day+0>",
+                "datetime": "<day+0>T09:30:00",
+                "string": "every weekday 9:30",
+                "recurring": true
+              },
+              "deadline": null,
+              "duration": null,
+              "projectId": "p000002",
+              "sectionId": null,
+              "parentId": null,
+              "labels": [],
+              "order": 3,
+              "commentCount": 0,
+              "completedAt": null,
+              "url": "https://app.todoist.com/app/task/stand-up-t00000c"
+            }
+          ],
+          "nextCursor": null,
+          "truncated": false
+        }
+      }
+    },
+    {
+      "operation": "list",
+      "params": {
+        "kind": "upcoming"
+      },
+      "api": [
+        {
+          "method": "GET",
+          "path": "/api/v1/tasks/filter",
+          "query": {
+            "query": "(due before: 14 days) & (assigned to: me | !assigned)",
+            "limit": "120"
+          }
+        }
+      ],
+      "result": {
+        "ok": {
+          "tasks": [
+            {
+              "id": "t00000a",
+              "content": "Overdue invoice",
+              "description": "",
+              "priority": 3,
+              "due": {
+                "date": "<day-2>",
+                "datetime": null,
+                "string": "Oct 12",
+                "recurring": false
+              },
+              "deadline": null,
+              "duration": null,
+              "projectId": "p000002",
+              "sectionId": "s000006",
+              "parentId": null,
+              "labels": [],
+              "order": 1,
+              "commentCount": 0,
+              "completedAt": null,
+              "url": "https://app.todoist.com/app/task/overdue-invoice-t00000a"
+            },
+            {
+              "id": "t00000b",
+              "content": "Review **PR #12** — https://github.com/acme/repo/pull/12",
+              "description": "Check the rollback path.\n\n- step one\n- step two",
+              "priority": 4,
+              "due": {
+                "date": "<day+0>",
+                "datetime": null,
+                "string": "today",
+                "recurring": false
+              },
+              "deadline": "<day+3>",
+              "duration": {
+                "amount": 45,
+                "unit": "minute"
+              },
+              "projectId": "p000002",
+              "sectionId": "s000005",
+              "parentId": null,
+              "labels": [
+                "review"
+              ],
+              "order": 2,
+              "commentCount": 0,
+              "completedAt": null,
+              "url": "https://app.todoist.com/app/task/review-pr-12-https-github-com-acme-repo-pull-12-t00000b"
+            },
+            {
+              "id": "t00000c",
+              "content": "Stand-up",
+              "description": "",
+              "priority": 1,
+              "due": {
+                "date": "<day+0>",
+                "datetime": "<day+0>T09:30:00",
+                "string": "every weekday 9:30",
+                "recurring": true
+              },
+              "deadline": null,
+              "duration": null,
+              "projectId": "p000002",
+              "sectionId": null,
+              "parentId": null,
+              "labels": [],
+              "order": 3,
+              "commentCount": 0,
+              "completedAt": null,
+              "url": "https://app.todoist.com/app/task/stand-up-t00000c"
+            },
+            {
+              "id": "t00000d",
+              "content": "Prep demo",
+              "description": "",
+              "priority": 2,
+              "due": {
+                "date": "<day+1>",
+                "datetime": null,
+                "string": "tomorrow",
+                "recurring": false
+              },
+              "deadline": null,
+              "duration": null,
+              "projectId": "p000003",
+              "sectionId": null,
+              "parentId": null,
+              "labels": [],
+              "order": 4,
+              "commentCount": 0,
+              "completedAt": null,
+              "url": "https://app.todoist.com/app/task/prep-demo-t00000d"
+            },
+            {
+              "id": "t00000e",
+              "content": "Quarterly review",
+              "description": "",
+              "priority": 1,
+              "due": {
+                "date": "<day+6>",
+                "datetime": null,
+                "string": "next tue",
+                "recurring": false
+              },
+              "deadline": null,
+              "duration": null,
+              "projectId": "p000004",
+              "sectionId": null,
+              "parentId": null,
+              "labels": [],
+              "order": 5,
+              "commentCount": 0,
+              "completedAt": null,
+              "url": "https://app.todoist.com/app/task/quarterly-review-t00000e"
+            },
+            {
+              "id": "t00000k",
+              "content": "Sub-step",
+              "description": "",
+              "priority": 1,
+              "due": {
+                "date": "<day+1>",
+                "datetime": null,
+                "string": "tomorrow",
+                "recurring": false
+              },
+              "deadline": null,
+              "duration": null,
+              "projectId": "p000002",
+              "sectionId": "s000005",
+              "parentId": "t00000b",
+              "labels": [],
+              "order": 11,
+              "commentCount": 0,
+              "completedAt": null,
+              "url": "https://app.todoist.com/app/task/sub-step-t00000k"
+            }
+          ],
+          "nextCursor": null,
+          "truncated": false
+        }
+      }
+    },
+    {
+      "operation": "list",
+      "params": {
+        "kind": "inbox"
+      },
+      "api": [
+        {
+          "method": "GET",
+          "path": "/api/v1/tasks",
+          "query": {
+            "project_id": "p000001",
+            "limit": "120"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/user"
+        }
+      ],
+      "result": {
+        "ok": {
+          "tasks": [
+            {
+              "id": "t00000g",
+              "content": "Call the bank",
+              "description": "",
+              "priority": 1,
+              "due": null,
+              "deadline": null,
+              "duration": null,
+              "projectId": "p000001",
+              "sectionId": null,
+              "parentId": null,
+              "labels": [],
+              "order": 7,
+              "commentCount": 0,
+              "completedAt": null,
+              "url": "https://app.todoist.com/app/task/call-the-bank-t00000g"
+            }
+          ],
+          "nextCursor": null,
+          "truncated": false
+        }
+      }
+    },
+    {
+      "operation": "list",
+      "params": {
+        "kind": "project",
+        "id": "p000002"
+      },
+      "api": [
+        {
+          "method": "GET",
+          "path": "/api/v1/tasks",
+          "query": {
+            "project_id": "p000002",
+            "limit": "120"
+          }
+        }
+      ],
+      "result": {
+        "ok": {
+          "tasks": [
+            {
+              "id": "t00000a",
+              "content": "Overdue invoice",
+              "description": "",
+              "priority": 3,
+              "due": {
+                "date": "<day-2>",
+                "datetime": null,
+                "string": "Oct 12",
+                "recurring": false
+              },
+              "deadline": null,
+              "duration": null,
+              "projectId": "p000002",
+              "sectionId": "s000006",
+              "parentId": null,
+              "labels": [],
+              "order": 1,
+              "commentCount": 0,
+              "completedAt": null,
+              "url": "https://app.todoist.com/app/task/overdue-invoice-t00000a"
+            },
+            {
+              "id": "t00000b",
+              "content": "Review **PR #12** — https://github.com/acme/repo/pull/12",
+              "description": "Check the rollback path.\n\n- step one\n- step two",
+              "priority": 4,
+              "due": {
+                "date": "<day+0>",
+                "datetime": null,
+                "string": "today",
+                "recurring": false
+              },
+              "deadline": "<day+3>",
+              "duration": {
+                "amount": 45,
+                "unit": "minute"
+              },
+              "projectId": "p000002",
+              "sectionId": "s000005",
+              "parentId": null,
+              "labels": [
+                "review"
+              ],
+              "order": 2,
+              "commentCount": 0,
+              "completedAt": null,
+              "url": "https://app.todoist.com/app/task/review-pr-12-https-github-com-acme-repo-pull-12-t00000b"
+            },
+            {
+              "id": "t00000c",
+              "content": "Stand-up",
+              "description": "",
+              "priority": 1,
+              "due": {
+                "date": "<day+0>",
+                "datetime": "<day+0>T09:30:00",
+                "string": "every weekday 9:30",
+                "recurring": true
+              },
+              "deadline": null,
+              "duration": null,
+              "projectId": "p000002",
+              "sectionId": null,
+              "parentId": null,
+              "labels": [],
+              "order": 3,
+              "commentCount": 0,
+              "completedAt": null,
+              "url": "https://app.todoist.com/app/task/stand-up-t00000c"
+            },
+            {
+              "id": "t00000j",
+              "content": "Someone else’s task",
+              "description": "",
+              "priority": 1,
+              "due": {
+                "date": "<day+0>",
+                "datetime": null,
+                "string": "today",
+                "recurring": false
+              },
+              "deadline": null,
+              "duration": null,
+              "projectId": "p000002",
+              "sectionId": null,
+              "parentId": null,
+              "labels": [],
+              "order": 10,
+              "commentCount": 0,
+              "completedAt": null,
+              "url": "https://app.todoist.com/app/task/someone-else-s-task-t00000j"
+            },
+            {
+              "id": "t00000k",
+              "content": "Sub-step",
+              "description": "",
+              "priority": 1,
+              "due": {
+                "date": "<day+1>",
+                "datetime": null,
+                "string": "tomorrow",
+                "recurring": false
+              },
+              "deadline": null,
+              "duration": null,
+              "projectId": "p000002",
+              "sectionId": "s000005",
+              "parentId": "t00000b",
+              "labels": [],
+              "order": 11,
+              "commentCount": 0,
+              "completedAt": null,
+              "url": "https://app.todoist.com/app/task/sub-step-t00000k"
+            }
+          ],
+          "nextCursor": null,
+          "truncated": false
+        }
+      }
+    },
+    {
+      "operation": "list",
+      "params": {
+        "kind": "label",
+        "query": "review"
+      },
+      "api": [
+        {
+          "method": "GET",
+          "path": "/api/v1/tasks",
+          "query": {
+            "label": "review",
+            "limit": "120"
+          }
+        }
+      ],
+      "result": {
+        "ok": {
+          "tasks": [
+            {
+              "id": "t00000b",
+              "content": "Review **PR #12** — https://github.com/acme/repo/pull/12",
+              "description": "Check the rollback path.\n\n- step one\n- step two",
+              "priority": 4,
+              "due": {
+                "date": "<day+0>",
+                "datetime": null,
+                "string": "today",
+                "recurring": false
+              },
+              "deadline": "<day+3>",
+              "duration": {
+                "amount": 45,
+                "unit": "minute"
+              },
+              "projectId": "p000002",
+              "sectionId": "s000005",
+              "parentId": null,
+              "labels": [
+                "review"
+              ],
+              "order": 2,
+              "commentCount": 0,
+              "completedAt": null,
+              "url": "https://app.todoist.com/app/task/review-pr-12-https-github-com-acme-repo-pull-12-t00000b"
+            }
+          ],
+          "nextCursor": null,
+          "truncated": false
+        }
+      }
+    },
+    {
+      "operation": "list",
+      "params": {
+        "kind": "filter",
+        "id": "f000009"
+      },
+      "api": [
+        {
+          "method": "GET",
+          "path": "/api/v1/tasks/filter",
+          "query": {
+            "query": "p1",
+            "limit": "120"
+          }
+        }
+      ],
+      "result": {
+        "ok": {
+          "tasks": [
+            {
+              "id": "t00000b",
+              "content": "Review **PR #12** — https://github.com/acme/repo/pull/12",
+              "description": "Check the rollback path.\n\n- step one\n- step two",
+              "priority": 4,
+              "due": {
+                "date": "<day+0>",
+                "datetime": null,
+                "string": "today",
+                "recurring": false
+              },
+              "deadline": "<day+3>",
+              "duration": {
+                "amount": 45,
+                "unit": "minute"
+              },
+              "projectId": "p000002",
+              "sectionId": "s000005",
+              "parentId": null,
+              "labels": [
+                "review"
+              ],
+              "order": 2,
+              "commentCount": 0,
+              "completedAt": null,
+              "url": "https://app.todoist.com/app/task/review-pr-12-https-github-com-acme-repo-pull-12-t00000b"
+            }
+          ],
+          "nextCursor": null,
+          "truncated": false
+        }
+      }
+    },
+    {
+      "operation": "list",
+      "params": {
+        "kind": "search",
+        "query": "passport"
+      },
+      "api": [
+        {
+          "method": "GET",
+          "path": "/api/v1/tasks/filter",
+          "query": {
+            "query": "search: passport",
+            "limit": "120"
+          }
+        }
+      ],
+      "result": {
+        "ok": {
+          "tasks": [
+            {
+              "id": "t00000f",
+              "content": "Renew passport",
+              "description": "",
+              "priority": 1,
+              "due": {
+                "date": "<day+60>",
+                "datetime": null,
+                "string": "in 2 months",
+                "recurring": false
+              },
+              "deadline": null,
+              "duration": null,
+              "projectId": "p000004",
+              "sectionId": null,
+              "parentId": null,
+              "labels": [],
+              "order": 6,
+              "commentCount": 0,
+              "completedAt": null,
+              "url": "https://app.todoist.com/app/task/renew-passport-t00000f"
+            }
+          ],
+          "nextCursor": null,
+          "truncated": false
+        }
+      }
+    },
+    {
+      "operation": "task",
+      "params": {
+        "id": "t00000b"
+      },
+      "api": [
+        {
+          "method": "GET",
+          "path": "/api/v1/comments",
+          "query": {
+            "task_id": "t00000b",
+            "limit": "50"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/tasks",
+          "query": {
+            "parent_id": "t00000b",
+            "limit": "200"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/tasks/t00000b"
+        }
+      ],
+      "result": {
+        "ok": {
+          "task": {
+            "id": "t00000b",
+            "content": "Review **PR #12** — https://github.com/acme/repo/pull/12",
+            "description": "Check the rollback path.\n\n- step one\n- step two",
+            "priority": 4,
+            "due": {
+              "date": "<day+0>",
+              "datetime": null,
+              "string": "today",
+              "recurring": false
+            },
+            "deadline": "<day+3>",
+            "duration": {
+              "amount": 45,
+              "unit": "minute"
+            },
+            "projectId": "p000002",
+            "sectionId": "s000005",
+            "parentId": null,
+            "labels": [
+              "review"
+            ],
+            "order": 2,
+            "commentCount": 0,
+            "completedAt": null,
+            "url": "https://app.todoist.com/app/task/review-pr-12-https-github-com-acme-repo-pull-12-t00000b"
+          },
+          "children": [
+            {
+              "id": "t00000k",
+              "content": "Sub-step",
+              "description": "",
+              "priority": 1,
+              "due": {
+                "date": "<day+1>",
+                "datetime": null,
+                "string": "tomorrow",
+                "recurring": false
+              },
+              "deadline": null,
+              "duration": null,
+              "projectId": "p000002",
+              "sectionId": "s000005",
+              "parentId": "t00000b",
+              "labels": [],
+              "order": 11,
+              "commentCount": 0,
+              "completedAt": null,
+              "url": "https://app.todoist.com/app/task/sub-step-t00000k"
+            }
+          ],
+          "comments": [
+            {
+              "id": "c00000l",
+              "content": "Rollback looks right; one nit.",
+              "postedAt": "<day-1>T08:00:00.000Z",
+              "attachment": null
+            },
+            {
+              "id": "c00000m",
+              "content": "CI is **green**.",
+              "postedAt": "<day-1>T09:00:00.000Z",
+              "attachment": null
+            }
+          ]
+        }
+      }
+    },
+    {
+      "operation": "quickAdd",
+      "params": {
+        "text": "Golden quick add tomorrow p1 #Work @review"
+      },
+      "api": [
+        {
+          "method": "POST",
+          "path": "/api/v1/tasks/quick",
+          "body": {
+            "text": "Golden quick add tomorrow p1 #Work @review"
+          }
+        }
+      ],
+      "result": {
+        "ok": {
+          "id": "t00000n",
+          "content": "Golden quick add",
+          "description": "",
+          "priority": 4,
+          "due": {
+            "date": "<day+1>",
+            "datetime": null,
+            "string": "tomorrow",
+            "recurring": false
+          },
+          "deadline": null,
+          "duration": null,
+          "projectId": "p000002",
+          "sectionId": null,
+          "parentId": null,
+          "labels": [
+            "review"
+          ],
+          "order": 12,
+          "commentCount": 0,
+          "completedAt": null,
+          "url": "https://app.todoist.com/app/task/golden-quick-add-t00000n"
+        }
+      }
+    },
+    {
+      "operation": "add",
+      "params": {
+        "content": "Golden structured",
+        "description": "Body",
+        "priority": 2,
+        "projectId": "p000002",
+        "sectionId": "s000006",
+        "labels": [
+          "deep-work"
+        ],
+        "due": "tomorrow",
+        "deadline": "<day+4>",
+        "duration": "45m"
+      },
+      "api": [
+        {
+          "method": "POST",
+          "path": "/api/v1/tasks",
+          "body": {
+            "content": "Golden structured",
+            "description": "Body",
+            "due_string": "tomorrow",
+            "deadline_date": "<day+4>",
+            "duration": 45,
+            "duration_unit": "minute",
+            "priority": 2,
+            "labels": [
+              "deep-work"
+            ],
+            "project_id": "p000002",
+            "section_id": "s000006"
+          }
+        }
+      ],
+      "result": {
+        "ok": {
+          "id": "t00000o",
+          "content": "Golden structured",
+          "description": "Body",
+          "priority": 2,
+          "due": {
+            "date": "<day+1>",
+            "datetime": null,
+            "string": "tomorrow",
+            "recurring": false
+          },
+          "deadline": "<day+4>",
+          "duration": {
+            "amount": 45,
+            "unit": "minute"
+          },
+          "projectId": "p000002",
+          "sectionId": "s000006",
+          "parentId": null,
+          "labels": [
+            "deep-work"
+          ],
+          "order": 13,
+          "commentCount": 0,
+          "completedAt": null,
+          "url": "https://app.todoist.com/app/task/golden-structured-t00000o"
+        }
+      }
+    },
+    {
+      "operation": "update",
+      "params": {
+        "id": "t00000e",
+        "content": "Renamed",
+        "priority": 3,
+        "due": "",
+        "labels": [],
+        "deadline": ""
+      },
+      "api": [
+        {
+          "method": "POST",
+          "path": "/api/v1/tasks/t00000e",
+          "body": {
+            "content": "Renamed",
+            "due_string": "no date",
+            "deadline_date": null,
+            "priority": 3,
+            "labels": []
+          }
+        }
+      ],
+      "result": {
+        "ok": {
+          "id": "t00000e",
+          "content": "Renamed",
+          "description": "",
+          "priority": 3,
+          "due": null,
+          "deadline": null,
+          "duration": null,
+          "projectId": "p000004",
+          "sectionId": null,
+          "parentId": null,
+          "labels": [],
+          "order": 5,
+          "commentCount": 0,
+          "completedAt": null,
+          "url": "https://app.todoist.com/app/task/renamed-t00000e"
+        }
+      }
+    },
+    {
+      "operation": "move",
+      "params": {
+        "id": "t00000g",
+        "projectId": "p000004"
+      },
+      "api": [
+        {
+          "method": "POST",
+          "path": "/api/v1/tasks/t00000g/move",
+          "body": {
+            "project_id": "p000004"
+          }
+        }
+      ],
+      "result": {
+        "ok": {
+          "ok": true,
+          "task": {
+            "id": "t00000g",
+            "content": "Call the bank",
+            "description": "",
+            "priority": 1,
+            "due": null,
+            "deadline": null,
+            "duration": null,
+            "projectId": "p000004",
+            "sectionId": null,
+            "parentId": null,
+            "labels": [],
+            "order": 7,
+            "commentCount": 0,
+            "completedAt": null,
+            "url": "https://app.todoist.com/app/task/call-the-bank-t00000g"
+          }
+        }
+      }
+    },
+    {
+      "operation": "complete",
+      "params": {
+        "id": "t00000d"
+      },
+      "api": [
+        {
+          "method": "GET",
+          "path": "/api/v1/tasks/t00000d"
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/tasks/t00000d/close"
+        }
+      ],
+      "result": {
+        "ok": {
+          "ok": true,
+          "task": {
+            "id": "t00000d",
+            "content": "Prep demo",
+            "description": "",
+            "priority": 2,
+            "due": {
+              "date": "<day+1>",
+              "datetime": null,
+              "string": "tomorrow",
+              "recurring": false
+            },
+            "deadline": null,
+            "duration": null,
+            "projectId": "p000003",
+            "sectionId": null,
+            "parentId": null,
+            "labels": [],
+            "order": 4,
+            "commentCount": 0,
+            "completedAt": "<now>",
+            "url": "https://app.todoist.com/app/task/prep-demo-t00000d"
+          }
+        }
+      }
+    },
+    {
+      "operation": "list",
+      "params": {
+        "kind": "completed"
+      },
+      "api": [
+        {
+          "method": "GET",
+          "path": "/api/v1/tasks/completed/by_completion_date",
+          "query": {
+            "since": "<day-14>",
+            "until": "<day+1>",
+            "limit": "120"
+          }
+        }
+      ],
+      "result": {
+        "ok": {
+          "tasks": [
+            {
+              "id": "t00000d",
+              "content": "Prep demo",
+              "description": "",
+              "priority": 2,
+              "due": {
+                "date": "<day+1>",
+                "datetime": null,
+                "string": "tomorrow",
+                "recurring": false
+              },
+              "deadline": null,
+              "duration": null,
+              "projectId": "p000003",
+              "sectionId": null,
+              "parentId": null,
+              "labels": [],
+              "order": 4,
+              "commentCount": 0,
+              "completedAt": "<now>",
+              "url": "https://app.todoist.com/app/task/prep-demo-t00000d"
+            }
+          ],
+          "nextCursor": null,
+          "truncated": false
+        }
+      }
+    },
+    {
+      "operation": "uncomplete",
+      "params": {
+        "id": "t00000d"
+      },
+      "api": [
+        {
+          "method": "GET",
+          "path": "/api/v1/tasks/t00000d"
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/tasks/t00000d/reopen"
+        }
+      ],
+      "result": {
+        "ok": {
+          "ok": true,
+          "task": {
+            "id": "t00000d",
+            "content": "Prep demo",
+            "description": "",
+            "priority": 2,
+            "due": {
+              "date": "<day+1>",
+              "datetime": null,
+              "string": "tomorrow",
+              "recurring": false
+            },
+            "deadline": null,
+            "duration": null,
+            "projectId": "p000003",
+            "sectionId": null,
+            "parentId": null,
+            "labels": [],
+            "order": 4,
+            "commentCount": 0,
+            "completedAt": null,
+            "url": "https://app.todoist.com/app/task/prep-demo-t00000d"
+          }
+        }
+      }
+    },
+    {
+      "operation": "comment",
+      "params": {
+        "taskId": "t00000d",
+        "content": "Golden comment"
+      },
+      "api": [
+        {
+          "method": "POST",
+          "path": "/api/v1/comments",
+          "body": {
+            "task_id": "t00000d",
+            "content": "Golden comment"
+          }
+        }
+      ],
+      "result": {
+        "ok": {
+          "id": "c00000p",
+          "content": "Golden comment",
+          "postedAt": "<now>",
+          "attachment": null
+        }
+      }
+    },
+    {
+      "operation": "createProject",
+      "params": {
+        "name": "Golden project",
+        "color": "grape"
+      },
+      "api": [
+        {
+          "method": "POST",
+          "path": "/api/v1/projects",
+          "body": {
+            "name": "Golden project",
+            "color": "grape"
+          }
+        }
+      ],
+      "result": {
+        "ok": {
+          "id": "p00000q",
+          "name": "Golden project",
+          "color": "grape",
+          "parentId": null,
+          "order": 1,
+          "isFavorite": false,
+          "isInbox": false,
+          "isShared": false,
+          "viewStyle": "list",
+          "url": "https://app.todoist.com/app/project/golden-project-p00000q"
+        }
+      }
+    },
+    {
+      "operation": "createLabel",
+      "params": {
+        "name": "golden",
+        "color": "teal"
+      },
+      "api": [
+        {
+          "method": "POST",
+          "path": "/api/v1/labels",
+          "body": {
+            "name": "golden",
+            "color": "teal"
+          }
+        }
+      ],
+      "result": {
+        "ok": {
+          "id": "l00000r",
+          "name": "golden",
+          "color": "teal",
+          "isFavorite": false,
+          "order": 12
+        }
+      }
+    },
+    {
+      "operation": "delete",
+      "params": {
+        "id": "t00000f"
+      },
+      "api": [
+        {
+          "method": "DELETE",
+          "path": "/api/v1/tasks/t00000f"
+        }
+      ],
+      "result": {
+        "ok": {
+          "ok": true,
+          "id": "t00000f"
+        }
+      }
+    }
+  ]
+}

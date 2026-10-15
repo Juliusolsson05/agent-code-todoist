@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Todoist extension preview</title>
+    <style>
+      /* The preview page is the "host": it only provides a sized box where
+         Agent Code would put the extension frame. */
+      html, body { margin: 0; height: 100%; }
+      #frame { height: 100vh; }
+      body.modal { display: grid; place-items: center; background: #0b0d10; }
+      body.modal #frame { height: auto; border-radius: 12px; overflow: hidden; box-shadow: 0 20px 60px rgb(0 0 0 / .5); }
+    </style>
+  </head>
+  <body>
+    <div id="frame"></div>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>
