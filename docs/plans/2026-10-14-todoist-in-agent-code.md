@@ -547,3 +547,14 @@ Decisions, all owner-confirmed:
 - Not verified: Agent Code itself (not launched), a real Todoist account, real browser OAuth, real brew.
 - Review round done (see Review of PR #2). Owner asked for a beta to try while fixes landed: `v0.1.0-beta.1`
   (pre-fix head `759c7ce`) published as a normal release; repo made public so the installer can download it.
+- 2026-10-15, rebuild for feel, as planned (one deviation, recorded): the service talks to Todoist through the SDK;
+  the runtime publishes a change feed and keeps list/meta caches with prefetch; the views run on a per-frame store
+  (`src/ui/store.ts`) with optimistic actions (`useTaskActions.ts`), quiet revalidation, the task modal, the inline
+  editor, FLIP and merged toasts. Deviation: the top quick-add bar was removed — Todoist has none; "+ Add task" sits
+  at the end of the list and of each section, and `q` and the sidebar's "Add task" open it.
+  Verification: 47 unit, 71 integration, 29 Chromium UI and 4 contract tests. New UI cases assert the feel
+  contracts with a slowed API: a completed row is gone in under 1.2 s while the server takes 2.5 s and never shows
+  as open again; Undo restores it within 300 ms; a revisited list paints within 300 ms with no empty state or
+  skeleton; a reschedule leaves Today within 400 ms; two quick priority writes land in order. Each was
+  mutation-checked (reverting the behaviour fails its test).
+

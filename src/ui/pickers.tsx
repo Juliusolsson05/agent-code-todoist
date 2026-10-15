@@ -29,7 +29,10 @@ function weekdayShort(offset: number): string {
   return d.toLocaleDateString(undefined, { weekday: 'short' })
 }
 
-export function DuePicker({ anchor, current, onPick, onClose, placeholder }: {
+export function DuePicker({ anchor, current, onPick, onClose, placeholder, inline }: {
+  /** Render inside the layout instead of floating (the Quick Add modal: a
+   *  floating menu there is clipped by the host's content-sized frame). */
+  inline?: boolean
   anchor: HTMLElement | null
   current?: string
   onPick: (value: string) => void
@@ -40,7 +43,7 @@ export function DuePicker({ anchor, current, onPick, onClose, placeholder }: {
   const presets = DUE_PRESETS
   const { active, setActive, onKeyDown } = useMenuKeys(presets.length, index => { onPick(presets[index].value); onClose() })
   return (
-    <Popover anchor={anchor} onClose={onClose} width={250}>
+    <Popover anchor={anchor} inline={inline} onClose={onClose} width={250}>
       <form
         onSubmit={event => {
           event.preventDefault()
@@ -82,7 +85,10 @@ export function DuePicker({ anchor, current, onPick, onClose, placeholder }: {
 // ---------------------------------------------------------------------------
 // Priority
 
-export function PriorityPicker({ anchor, current, onPick, onClose }: {
+export function PriorityPicker({ anchor, current, onPick, onClose, inline }: {
+  /** Render inside the layout instead of floating (the Quick Add modal: a
+   *  floating menu there is clipped by the host's content-sized frame). */
+  inline?: boolean
   anchor: HTMLElement | null
   current: ApiPriority
   onPick: (value: ApiPriority) => void
@@ -91,7 +97,7 @@ export function PriorityPicker({ anchor, current, onPick, onClose }: {
   const options: ApiPriority[] = [4, 3, 2, 1]
   const { active, setActive } = useMenuKeys(options.length, () => {})
   return (
-    <Popover anchor={anchor} onClose={onClose} width={190}>
+    <Popover anchor={anchor} inline={inline} onClose={onClose} width={190}>
       <div className="td-menu" role="menu">
         {options.map((priority, index) => (
           <button
@@ -117,7 +123,10 @@ export function PriorityPicker({ anchor, current, onPick, onClose }: {
 // ---------------------------------------------------------------------------
 // Labels (multi-select)
 
-export function LabelPicker({ anchor, labels, selected, onChange, onCreate, onClose }: {
+export function LabelPicker({ anchor, labels, selected, onChange, onCreate, onClose, inline }: {
+  /** Render inside the layout instead of floating (the Quick Add modal: a
+   *  floating menu there is clipped by the host's content-sized frame). */
+  inline?: boolean
   anchor: HTMLElement | null
   labels: LabelRow[]
   selected: string[]
@@ -148,7 +157,7 @@ export function LabelPicker({ anchor, labels, selected, onChange, onCreate, onCl
     }
   }
   return (
-    <Popover anchor={anchor} onClose={onClose} width={250}>
+    <Popover anchor={anchor} inline={inline} onClose={onClose} width={250}>
       <input autoFocus className="td-popover-input" placeholder="Type a label" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={onKeyDown} />
       <div className="td-menu" role="menu">
         {visible.map((label, index) => (
@@ -183,7 +192,10 @@ export function LabelPicker({ anchor, labels, selected, onChange, onCreate, onCl
 
 export type ProjectTarget = { projectId: string; sectionId: string | null }
 
-export function ProjectPicker({ anchor, meta, current, onPick, onClose }: {
+export function ProjectPicker({ anchor, meta, current, onPick, onClose, inline }: {
+  /** Render inside the layout instead of floating (the Quick Add modal: a
+   *  floating menu there is clipped by the host's content-sized frame). */
+  inline?: boolean
   anchor: HTMLElement | null
   meta: Meta
   current?: ProjectTarget
@@ -207,7 +219,7 @@ export function ProjectPicker({ anchor, meta, current, onPick, onClose }: {
   }, [meta, q])
   const { active, setActive, onKeyDown } = useMenuKeys(rows.length, index => { onPick(rows[index].target); onClose() })
   return (
-    <Popover anchor={anchor} onClose={onClose} width={280}>
+    <Popover anchor={anchor} inline={inline} onClose={onClose} width={280}>
       <input autoFocus className="td-popover-input" placeholder="Type a project or section" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={onKeyDown} />
       <div className="td-menu" role="menu">
         {rows.map((row, index) => {

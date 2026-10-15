@@ -127,15 +127,23 @@ export function createFakeContext(setupState: string, modal: boolean): ViewConte
     error: null,
     checkedAt: Date.now(),
   }
-  let state: HostState = { revision: 1, setup, settings: { tdPath: '', defaultView: 'today', dueReminders: false, reminderIntervalMinutes: 5, inheritTheme: new URLSearchParams(location.search).get('inherit') === '1' } }
+  let state: HostState = { revision: 1, metaRevision: 1, changeSeq: 0, changes: [], setup, settings: { tdPath: '', defaultView: 'today', dueReminders: false, reminderIntervalMinutes: 5, inheritTheme: new URLSearchParams(location.search).get('inherit') === '1' } }
   const publish = () => listeners.forEach(l => l(state as unknown as JsonValue))
-  const bump = () => { state = { ...state, revision: state.revision + 1 }; publish() }
+  // The same change feed the real runtime publishes (src/runtime.ts): views
+  // update in place instead of refetching.
+  const change = (c: Record<string, unknown>) => {
+    const seq = state.changeSeq + 1
+    state = { ...state, changeSeq: seq, changes: [...state.changes, { ...c, seq } as never].slice(-40) }
+    publish()
+  }
+  const bump = () => { state = { ...state, metaRevision: state.metaRevision + 1 }; change({ kind: 'meta' }) }
   const wait = (ms = 220) => new Promise(r => setTimeout(r, ms))
   const storage = new Map<string, JsonValue>()
 
   const request = async (name: string, input?: JsonValue): Promise<JsonValue | undefined> => {
+    const p = (input ?? {}) as { id: string; text: string; cached?: boolean }
+    if (p.cached) return null
     await wait()
-    const p = (input ?? {}) as { id: string; text: string }
     const find = (id: string) => tasks.find(t => t.id === id) ?? completed.find(t => t.id === id)
     switch (name) {
       case 'status': publish(); return state.setup as unknown as JsonValue
@@ -146,15 +154,29 @@ export function createFakeContext(setupState: string, modal: boolean): ViewConte
         const t = find(p.id)!
         return { task: t, children: tasks.filter(c => c.parentId === t.id), comments: t.commentCount ? comments : [] } as unknown as JsonValue
       }
-      case 'quickAdd': {
-        const t = task({ content: String(p.text).replace(/\b(today|tomorrow)\b|p[1-4]|#\S+|@\S+/g, '').trim(), due: /today/.test(p.text) ? due(0, 'today') : null })
+      case 'quickAdd':
+      case 'addWithIntent': {
+        const intent = (input as { intent?: { due?: string | null; projectId?: string | null } }).intent ?? {}
+        const t = task({
+          content: String(p.text).replace(/\b(today|tomorrow)\b|p[1-4]|#\S+|@\S+/g, '').trim(),
+          due: /today/.test(p.text) || intent.due === 'today' ? due(0, 'today') : null,
+          projectId: intent.projectId ?? 'p-inbox',
+        })
         tasks.push(t)
-        bump()
-        return t as unknown as JsonValue
+        change({ kind: 'upsert', task: t })
+        return (name === 'quickAdd' ? t : { task: t, partial: null }) as unknown as JsonValue
       }
-      case 'complete': { const t = find(p.id)!; t.completedAt = new Date().toISOString(); tasks = tasks.filter(x => x.id !== t.id); completed.unshift(t); bump(); return { ok: true } }
-      case 'uncomplete': { const t = find(p.id)!; t.completedAt = null; tasks.push(t); bump(); return { ok: true } }
-      case 'update': { const t = find(p.id)!; Object.assign(t, { ...(p as object), id: t.id }); bump(); return t as unknown as JsonValue }
+      case 'complete': {
+        const t = find(p.id)!
+        t.completedAt = new Date().toISOString()
+        tasks = tasks.filter(x => x.id !== t.id)
+        completed.unshift(t)
+        change({ kind: 'remove', id: t.id, reason: 'completed', task: t })
+        return { ok: true, task: t } as unknown as JsonValue
+      }
+      case 'uncomplete': { const t = find(p.id)!; t.completedAt = null; tasks.push(t); change({ kind: 'upsert', task: t }); return { ok: true, task: t } as unknown as JsonValue }
+      case 'update': { const t = find(p.id)!; Object.assign(t, { ...(p as object), id: t.id }); change({ kind: 'upsert', task: t }); return t as unknown as JsonValue }
+      case 'delete': { tasks = tasks.filter(x => x.id !== p.id); change({ kind: 'remove', id: p.id, reason: 'deleted', task: null }); return { ok: true, id: p.id } }
       case 'openUrl': return { ok: true }
       default: bump(); return { ok: true }
     }

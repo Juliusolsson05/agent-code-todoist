@@ -29,7 +29,14 @@ after(async () => {
 
 const task = id => world.fake.tasks.find(t => t.id === id)
 const row = (page, text) => page.locator('.td-list [role="listitem"]', { hasText: text }).first()
-const drawer = page => page.locator('aside[aria-label="Task details"]')
+const drawer = page => page.locator('[role="dialog"][aria-label="Task details"]')
+/** The "+ Add task" editor at the end of the list (opened like a user would). */
+async function addInput(page) {
+  const input = page.getByLabel('Task name')
+  if (!(await input.count())) await page.locator('.td-add-task-btn').last().click()
+  await input.waitFor()
+  return input
+}
 const recurringToday = content => world.fake.addTask({ content, due: { date: dayFromToday(0), datetime: null, is_recurring: true, lang: 'en', string: 'every day', timezone: null } })
 
 async function withView(options, fn) {
@@ -62,7 +69,7 @@ test('Esc closes the innermost panel, never the whole pane; with nothing open it
     await row(page, 'Renew passport').waitFor()
     await page.getByPlaceholder('Search tasks').press('ArrowDown')
     await page.keyboard.press('Escape')
-    await page.getByRole('heading', { name: 'Today' }).waitFor()
+    await page.getByRole('heading', { name: 'Today', exact: true, level: 1 }).waitFor()
     assert.equal(events.hostEscapes, 0, 'search took the Escape and left the results')
 
     await page.keyboard.press('Escape')
@@ -107,6 +114,7 @@ test('the drawer checkbox shows what the server did: nothing on failure, the nex
     await new Promise(r => setTimeout(r, 500))
     assert.equal(await drawer(page).locator('.td-checkbox.lg.is-checked').count(), 0, 'not painted as done')
     assert.equal(task(s.t.overdue.id).checked, false)
+    await page.keyboard.press('Escape') // the task view sits over the list
 
     await row(page, 'Stretch').click()
     await drawer(page).getByRole('heading', { name: 'Stretch' }).waitFor()
@@ -119,9 +127,10 @@ test('the drawer checkbox shows what the server did: nothing on failure, the nex
 
 test('quick add: a description stays a description and the task is still due today', async () => {
   await withView({}, async ({ page }) => {
-    await page.getByLabel('Quick add task').fill('Fix login // see logs from prod')
-    await page.getByLabel('Quick add task').press('Enter')
-    await page.locator('.td-toast', { hasText: 'Added' }).waitFor()
+    const input = await addInput(page)
+    await input.fill('Fix login // see logs from prod')
+    await input.press('Enter')
+    await row(page, 'Fix login').waitFor()
     const created = await eventually(() => world.fake.tasks.find(t => t.content === 'Fix login' && t.due), { what: 'the scheduled task' })
     assert.equal(created.description, 'see logs from prod')
     assert.equal(created.due.date, dayFromToday(0))
@@ -131,13 +140,13 @@ test('quick add: a description stays a description and the task is still due tod
 test('quick add in a project: an issue number does not send the task to Inbox; a failed move is reported once', async () => {
   await withView({}, async ({ page }) => {
     await page.getByRole('button', { name: 'Home', exact: true }).click()
-    await page.getByRole('heading', { name: 'Home' }).waitFor()
-    const input = page.getByLabel('Quick add task')
+    await page.getByRole('heading', { name: 'Home', exact: true, level: 1 }).waitFor()
+    const input = await addInput(page)
     await input.fill('Fix #123 crash')
     await input.press('Enter')
     const issue = await eventually(() => world.fake.tasks.find(t => t.content === 'Fix #123 crash' && t.project_id === s.home.id), { what: 'the task in Home' })
     assert.ok(issue)
-    await page.locator('.td-toast', { hasText: 'Added “Fix #123 crash”' }).waitFor()
+    await row(page, 'Fix #123 crash').waitFor()
 
     world.fake.fail(r => /^\/api\/v1\/tasks\/[^/]+\/move$/.test(r.path), { status: 500, times: 1 })
     await input.fill('Half applied')
@@ -150,7 +159,7 @@ test('quick add in a project: an issue number does not send the task to Inbox; a
 
 test('rapid entry: a line typed while the previous add is in flight is kept and added', async () => {
   await withView({}, async ({ page }) => {
-    const input = page.getByLabel('Quick add task')
+    const input = await addInput(page)
     await input.fill('Rapid one')
     await input.press('Enter')
     await input.fill('Rapid two') // immediately: the first add is still running
@@ -165,7 +174,7 @@ test('rapid entry: a line typed while the previous add is in flight is kept and 
 test('a failed add gives the text back', async () => {
   await withView({}, async ({ page }) => {
     world.fake.fail(r => r.path === '/api/v1/tasks/quick', { status: 500, times: 1 })
-    const input = page.getByLabel('Quick add task')
+    const input = await addInput(page)
     await input.fill('Comes back')
     await input.press('Enter')
     await page.locator('.td-toast.is-error').first().waitFor()
@@ -208,7 +217,7 @@ test('the Todoist look is the default; "Use Agent Code\'s colours" switches live
 
 test('the "Open on" setting decides where the pane opens', async () => {
   await withView({ storage: { 'todoist.defaultView': 'inbox' } }, async ({ page }) => {
-    await page.getByRole('heading', { name: 'Inbox' }).waitFor()
+    await page.getByRole('heading', { name: 'Inbox', exact: true, level: 1 }).waitFor()
   })
 })
 
@@ -218,7 +227,7 @@ test('"Open in Modal": the full workspace at a fixed natural size, closable by b
     // The host sizes a modal from its content: the root must not depend on
     // the frame's own height (100vh), or the modal collapses.
     const box = await page.locator('.td-root').boundingBox()
-    assert.deepEqual([box.width, box.height], [1100, 720])
+    assert.deepEqual([box.width, box.height], [960, 640])
     await row(page, 'Overdue invoice').click()
     await drawer(page).waitFor()
     await page.keyboard.press('Escape')
@@ -308,11 +317,11 @@ test('⌫ never opens a delete while typing or inside a picker, and Tab stays in
   const t = world.fake.addTask({ content: 'Guarded task', due: todayDue() })
   await withView({}, async ({ page }) => {
     const dialog = page.getByRole('dialog', { name: 'Delete task' })
-    await page.getByLabel('Quick add task').fill('abc')
-    await page.getByLabel('Quick add task').press('Backspace')
-    assert.equal(await page.getByLabel('Quick add task').inputValue(), 'ab', 'Backspace edits the text')
-    await page.getByLabel('Quick add task').press('Escape') // clear
-    await page.getByLabel('Quick add task').press('Escape') // blur
+    const input = await addInput(page)
+    await input.fill('abc')
+    await input.press('Backspace')
+    assert.equal(await input.inputValue(), 'ab', 'Backspace edits the text')
+    await input.press('Escape') // closes the editor
 
     await row(page, 'Guarded task').hover()
     await row(page, 'Guarded task').getByTitle('Priority (1–4)').click()
@@ -361,11 +370,107 @@ test('a failed delete restores the CURRENT view, not the one the delete started 
     await row(page, 'Fails slowly').getByTitle('Delete (⌫)').click()
     await page.getByRole('dialog', { name: 'Delete task' }).getByRole('button', { name: 'Delete' }).click()
     await page.getByRole('button', { name: 'Inbox', exact: true }).first().click()
-    await page.getByRole('heading', { name: 'Inbox' }).waitFor()
+    await page.getByRole('heading', { name: 'Inbox', exact: true, level: 1 }).waitFor()
     await page.locator('.td-toast.is-error').first().waitFor({ timeout: 20_000 })
     await new Promise(r => setTimeout(r, 2500))
     assert.equal(await row(page, 'Fails slowly').count(), 0, 'Today’s task did not appear in Inbox')
     assert.equal(task(doomed.id).is_deleted, false)
+  })
+})
+
+// ---- feel: the rebuild's promises (plan "Rebuild for feel") ---------------
+
+test('completing never flashes back: the row leaves in ~450 ms and stays gone while Todoist is slow', async () => {
+  const slow = world.fake.addTask({ content: 'Slow server completion', due: todayDue() })
+  await withView({}, async ({ page }) => {
+    await row(page, 'Slow server completion').waitFor()
+    world.fake.fail(r => r.path === `/api/v1/tasks/${slow.id}/close`, { status: 200, body: {}, delayMs: 2500, times: 1 })
+    // Record the row's state every frame from the click on.
+    await page.evaluate(() => {
+      window.__states = []
+      const tick = () => {
+        const el = [...document.querySelectorAll('.td-list [role="listitem"]')].find(e => e.textContent.includes('Slow server completion'))
+        window.__states.push(el ? (el.className.includes('is-done') ? 'done' : 'open') : 'gone')
+        if (window.__states.length < 240) requestAnimationFrame(tick)
+      }
+      requestAnimationFrame(tick)
+    })
+    const clicked = Date.now()
+    await row(page, 'Slow server completion').locator('button[aria-label="Complete task"]').click()
+    await page.locator('.td-toast', { hasText: 'Task completed' }).waitFor({ timeout: 300 }) // the toast comes with the click
+    await row(page, 'Slow server completion').waitFor({ state: 'detached' })
+    assert.ok(Date.now() - clicked < 1200, `gone after ${Date.now() - clicked} ms although the server takes 2.5 s`)
+    await new Promise(r => setTimeout(r, 3000))
+    const states = await page.evaluate(() => window.__states)
+    const firstDone = states.indexOf('done')
+    assert.ok(firstDone >= 0, 'it showed as done')
+    assert.ok(!states.slice(firstDone).includes('open'), 'and never as open again')
+    assert.equal(world.fake.requestsTo('POST', `/api/v1/tasks/${slow.id}/close`).length, 1, 'one close was sent')
+  })
+})
+
+test('Undo brings the row back at once', async () => {
+  const t = world.fake.addTask({ content: 'Undo me quickly', due: todayDue() })
+  await withView({}, async ({ page }) => {
+    await row(page, 'Undo me quickly').locator('button[aria-label="Complete task"]').click()
+    await row(page, 'Undo me quickly').waitFor({ state: 'detached' })
+    await page.locator('.td-toast', { hasText: 'completed' }).getByRole('button', { name: 'Undo' }).click()
+    await row(page, 'Undo me quickly').waitFor({ timeout: 300 })
+    await eventually(() => task(t.id).checked === false, { what: 'reopened on the server' })
+    await new Promise(r => setTimeout(r, 800))
+    assert.ok(await row(page, 'Undo me quickly').isVisible(), 'and it stays')
+  })
+})
+
+test('a list seen before paints from memory: no empty state, no skeleton, no "0"', async () => {
+  await withView({}, async ({ page }) => {
+    await row(page, 'Stand-up').waitFor()
+    await page.getByRole('button', { name: /^Inbox/ }).first().click()
+    await page.getByRole('heading', { name: 'Inbox', exact: true, level: 1 }).waitFor()
+    await page.evaluate(() => {
+      window.__flash = []
+      const watch = new MutationObserver(() => {
+        if (document.querySelector('.td-empty, .td-skeleton-list')) window.__flash.push('flash')
+      })
+      watch.observe(document.body, { childList: true, subtree: true })
+      window.__stop = () => watch.disconnect()
+    })
+    const started = Date.now()
+    await page.getByRole('button', { name: /^Today/ }).first().click()
+    await row(page, 'Stand-up').waitFor({ timeout: 300 })
+    const elapsed = Date.now() - started
+    await page.evaluate(() => window.__stop())
+    assert.deepEqual(await page.evaluate(() => window.__flash), [], 'nothing flashed')
+    assert.ok(elapsed < 300, `painted in ${elapsed} ms`)
+  })
+})
+
+test('rescheduling out of Today moves the row at once, before Todoist answers', async () => {
+  const t = world.fake.addTask({ content: 'Push to tomorrow', due: todayDue() })
+  await withView({}, async ({ page }) => {
+    world.fake.fail(r => r.method === 'POST' && r.path === `/api/v1/tasks/${t.id}`, { status: 200, body: undefined, delayMs: 2000, times: 1 })
+    await row(page, 'Push to tomorrow').hover()
+    await row(page, 'Push to tomorrow').getByTitle('Schedule (t = today)').click()
+    await page.locator('.td-popover').getByRole('menuitem', { name: /Tomorrow/ }).click()
+    await row(page, 'Push to tomorrow').waitFor({ state: 'detached', timeout: 400 })
+  })
+  world.fake.faults.length = 0
+})
+
+test('two quick priority changes land in the order they were made', async () => {
+  const t = world.fake.addTask({ content: 'Priority ordering', due: todayDue() })
+  await withView({}, async ({ page }) => {
+    await row(page, 'Priority ordering').click()
+    await page.keyboard.press('Escape')
+    // The first write is slow; the second must still be the one that sticks.
+    world.fake.fail(r => r.method === 'POST' && r.path === `/api/v1/tasks/${t.id}` && r.body?.priority === 4, { delayMs: 1200, delayOnly: true, times: 1 })
+    await page.keyboard.press('1')
+    await page.keyboard.press('4')
+    await eventually(() => world.fake.requestsTo('POST', `/api/v1/tasks/${t.id}`).length >= 2, { what: 'both writes' })
+    await new Promise(r => setTimeout(r, 500))
+    await eventually(() => task(t.id).priority === 1, { what: 'the final write', timeout: 4000 }).catch(() => {})
+    await new Promise(r => setTimeout(r, 1500)) // past the slow first write
+    assert.equal(task(t.id).priority, 1, 'the last choice (p4 = API 1) is what Todoist has, though the first write was slower')
   })
 })
 
@@ -380,12 +485,12 @@ test('Quick Add lists agent sessions saved without a kind, and no terminals', as
   })
 })
 
-test('a description draft is saved, not lost, when another task is opened', async () => {
+test('a description draft is saved, not lost, when the task view moves on or closes', async () => {
   await withView({}, async ({ page }) => {
     await row(page, 'Overdue invoice').click()
     await drawer(page).getByRole('button', { name: 'Add description' }).click()
     await drawer(page).locator('textarea.td-edit-desc').fill('Half-written note')
-    await row(page, 'Stand-up').click()
+    await drawer(page).getByTitle('Close (Esc)').click()
     await eventually(() => task(s.t.overdue.id).description === 'Half-written note', { what: 'the draft to be saved' })
   })
 })

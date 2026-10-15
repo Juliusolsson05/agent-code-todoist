@@ -305,15 +305,29 @@ kbd {
 .td-group-sub { font-weight: 500; color: var(--td-muted); font-size: 11.5px; }
 .td-group-count { margin-left: auto; font-weight: 500; color: var(--td-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
 
+/* A Todoist list row: a divider list with a flat full-width hover — one
+   selection cue, not three (beta.4 combined a rounded pill, a divider and an
+   accent bar). Focus (keyboard) shows instantly: no background fade trailing
+   behind j/k. */
 .td-task {
   position: relative; display: flex; align-items: flex-start; gap: 10px;
-  padding: 8px 10px 8px 12px; border-radius: 8px; cursor: default;
-  border-bottom: 1px solid color-mix(in srgb, var(--td-border) 55%, transparent);
-  transition: background 0.1s, opacity 0.35s, transform 0.35s;
+  padding: 7px 10px 7px 12px; cursor: default; overflow: hidden;
+  border-bottom: 1px solid var(--td-border);
 }
 .td-task:hover { background: var(--td-hover); }
-.td-task.is-focused { background: var(--td-selected); box-shadow: inset 2px 0 0 var(--td-accent); }
-.td-task.is-completing { opacity: 0.35; transform: translateX(6px); }
+.td-task.is-focused { background: var(--td-selected); }
+/* Not confirmed yet (a quick-add row, an edit in flight that changed text). */
+.td-task.is-pending { opacity: 0.6; }
+/* Completing: the check fills and the title strikes at once (is-checked via
+   is-done below); then the row folds away over 200 ms so the rows under it
+   slide up instead of jumping (store.ts CHECK_MS/COLLAPSE_MS). */
+.td-task.is-collapsing { animation: td-collapse 200ms cubic-bezier(.2, 0, 0, 1) forwards; pointer-events: none; }
+@keyframes td-collapse {
+  from { max-height: var(--row-h, 60px); opacity: 1; }
+  to { max-height: 0; opacity: 0; padding-top: 0; padding-bottom: 0; border-bottom-width: 0; }
+}
+.td-task.is-checked .td-checkbox { animation: td-check-pop 220ms ease-out; }
+@keyframes td-check-pop { 40% { transform: scale(1.18); } }
 .td-task.is-done .td-task-title { color: var(--td-muted); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--td-muted) 60%, transparent); }
 .td-task.is-skeleton { pointer-events: none; }
 .td-task-main { flex: 1; min-width: 0; padding-top: 1px; }
@@ -332,7 +346,7 @@ kbd {
 .td-deadline { color: var(--td-dim); }
 .td-label { opacity: 0.92; }
 
-.td-task-actions { display: flex; gap: 0; opacity: 0; transition: opacity 0.12s; margin: -3px -4px 0 0; }
+.td-task-actions { display: flex; gap: 0; opacity: 0; margin: -3px -4px 0 0; }
 .td-task:hover .td-task-actions, .td-task.is-focused .td-task-actions, .td-task-actions:focus-within { opacity: 1; }
 
 /* Priority checkbox: ring tinted by priority, fill on hover/checked. */
@@ -345,8 +359,8 @@ kbd {
 .td-checkbox.p4, .td-checkbox.p3, .td-checkbox.p2 { background: color-mix(in srgb, var(--prio) 12%, transparent); border-width: 2px; }
 .td-checkbox svg { width: 12px; height: 12px; fill: none; stroke: var(--prio); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; opacity: 0; transition: opacity 0.12s; }
 .td-checkbox:hover svg { opacity: 0.85; }
-.td-task.is-done .td-checkbox, .td-checkbox.is-checked, .td-task.is-completing .td-checkbox { background: var(--prio); border-color: var(--prio); }
-.td-task.is-done .td-checkbox svg, .td-checkbox.is-checked svg, .td-task.is-completing .td-checkbox svg { opacity: 1; stroke: #fff; }
+.td-task.is-done .td-checkbox, .td-checkbox.is-checked { background: var(--prio); border-color: var(--prio); }
+.td-task.is-done .td-checkbox svg, .td-checkbox.is-checked svg { opacity: 1; stroke: #fff; }
 .td-checkbox.p1 { --prio: var(--td-muted); }
 .td-task.is-done .td-checkbox.p1, .td-checkbox.p1.is-checked { background: var(--td-muted); }
 .td-checkbox.lg { width: 22px; height: 22px; margin-top: 3px; }
@@ -470,6 +484,7 @@ kbd {
 .td-md-pre code { background: none; padding: 0; }
 
 /* ---------- popovers ---------- */
+.td-popover.is-inline { position: static; margin: 8px 0 2px; max-height: 260px; box-shadow: none; animation: none; }
 .td-popover {
   position: fixed; z-index: 100; display: flex; flex-direction: column; overflow: hidden;
   background: var(--td-elevated); border: 1px solid var(--td-border-hi); border-radius: 10px; box-shadow: var(--td-shadow);
@@ -498,7 +513,7 @@ kbd {
 .td-section-glyph { width: 9px; height: 2px; background: var(--td-muted); border-radius: 1px; }
 
 /* ---------- toasts ---------- */
-.td-toasts { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 200; display: flex; flex-direction: column; gap: 6px; align-items: center; pointer-events: none; width: max-content; max-width: calc(100% - 24px); }
+.td-toasts { position: absolute; left: 14px; bottom: 14px; z-index: 200; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; pointer-events: none; max-width: min(420px, calc(100% - 28px)); }
 .td-toast {
   pointer-events: auto; display: flex; align-items: center; gap: 14px; padding: 8px 8px 8px 14px; min-height: 36px;
   background: var(--td-ink); color: var(--td-bg); border-radius: 9px; box-shadow: var(--td-shadow); font-size: 12.5px;
@@ -509,6 +524,10 @@ kbd {
 .td-toast button { border: 0; background: transparent; color: inherit; font-weight: 700; padding: 4px 8px; border-radius: 6px; }
 .td-toast button:hover { background: color-mix(in srgb, currentColor 14%, transparent); }
 @keyframes td-toast-in { from { opacity: 0; transform: translateY(6px); } }
+.td-toast.is-leaving { animation: td-toast-out 0.16s ease-in forwards; }
+@keyframes td-toast-out { to { opacity: 0; transform: translateY(4px); } }
+.td-toast button.td-toast-close { padding: 4px; opacity: 0.6; }
+.td-toast button.td-toast-close:hover { opacity: 1; }
 
 /* ---------- help ---------- */
 .td-modal-scrim { position: absolute; inset: 0; z-index: 150; background: rgb(0 0 0 / 0.4); display: grid; place-items: center; animation: td-fade 0.12s; }
@@ -548,8 +567,10 @@ kbd {
    content (frameDocument.ts reportSize), so this must be a fixed natural size:
    100vh would resolve against the iframe, whose height comes from us. 1100x720
    fits a 13" laptop window unscaled; the host scales it down below that. */
-.td-root.td-window-root { width: 1100px; height: 720px; }
-.td-modal-root { height: auto; min-height: 0; width: min(620px, 100vw); background: var(--td-surface); }
+.td-root.td-window-root { width: 960px; height: 640px; }
+/* A definite width: `min(620px, 100vw)` was circular in a content-sized modal
+   (100vw IS the frame, which is sized from us) and rendered 300 px wide. */
+.td-modal-root { height: auto; min-height: 0; width: 600px; background: var(--td-surface); }
 .td-modal-root .td-setup { padding: 12px; }
 .td-modal-root .td-setup-card { border: 0; background: transparent; }
 .td-qa { display: flex; flex-direction: column; gap: 10px; padding: 16px 16px 12px; }
@@ -601,3 +622,57 @@ kbd {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* ---------- task modal (Todoist's task view) ---------- */
+.td-task-modal-scrim {
+  position: absolute; inset: 0; z-index: 120; background: rgb(0 0 0 / 0.35);
+  display: grid; place-items: start center; padding: 6vh 16px 16px; animation: td-fade 0.12s;
+}
+.td-task-modal {
+  width: min(860px, 100%); max-height: 86vh; display: flex; flex-direction: column; overflow: hidden;
+  background: var(--td-elevated); border: 1px solid var(--td-border); border-radius: 12px; box-shadow: var(--td-shadow);
+  animation: td-modal-in 0.14s cubic-bezier(.2, 0, 0, 1);
+}
+@keyframes td-modal-in { from { opacity: 0; transform: translateY(6px) scale(0.99); } }
+.td-task-modal-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 8px 8px 14px; border-bottom: 1px solid var(--td-border); min-height: 46px; }
+.td-task-modal-body { flex: 1; min-height: 0; display: flex; overflow: hidden; }
+.td-task-modal-main { flex: 1; min-width: 0; overflow-y: auto; padding: 16px 18px 32px; }
+.td-task-modal-side {
+  flex: none; width: 250px; overflow-y: auto; padding: 14px 14px 24px; display: flex; flex-direction: column; gap: 2px;
+  background: var(--td-surface); border-left: 1px solid var(--td-border);
+}
+.td-side-row { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 8px 0; border-bottom: 1px solid var(--td-border); }
+.td-side-row:last-child { border-bottom: 0; }
+.td-side-row .td-prop-label { font-size: 11.5px; font-weight: 600; color: var(--td-dim); display: inline-flex; align-items: center; gap: 6px; }
+.td-side-row .td-prop-value { margin-left: -6px; }
+@media (max-width: 700px) {
+  .td-task-modal-scrim { padding: 0; place-items: stretch; }
+  .td-task-modal { width: 100%; max-height: none; border-radius: 0; }
+  .td-task-modal-body { flex-direction: column; overflow-y: auto; }
+  .td-task-modal-main { overflow: visible; }
+  .td-task-modal-side { width: auto; border-left: 0; border-top: 1px solid var(--td-border); overflow: visible; }
+}
+
+/* ---------- + Add task (Todoist's inline editor) ---------- */
+.td-add-task-btn {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px 8px 12px;
+  border: 0; background: transparent; color: var(--td-muted); font-size: 13px; text-align: left;
+}
+.td-add-task-plus { width: 18px; height: 18px; display: grid; place-items: center; border-radius: 50%; color: var(--td-accent); }
+.td-add-task-btn:hover { color: var(--td-accent); }
+.td-add-task-btn:hover .td-add-task-plus { background: var(--td-accent); color: var(--td-accent-fg); }
+.td-add-editor {
+  margin: 6px 6px 10px; padding: 10px 12px 8px; border: 1px solid var(--td-border-hi); border-radius: 10px;
+  background: var(--td-bg); display: flex; flex-direction: column; gap: 6px;
+}
+.td-add-editor:focus-within { border-color: color-mix(in srgb, var(--td-ink) 30%, var(--td-border-hi)); }
+.td-add-editor-title { height: 26px; flex: none; }
+.td-add-editor-title .td-quickadd-input, .td-add-editor-title .td-quickadd-mirror { font-size: 14px; font-weight: 600; line-height: 26px; }
+.td-add-editor-desc { border: 0; background: transparent; resize: none; outline: none; font-size: 12.5px; color: var(--td-dim); padding: 0; }
+.td-add-editor-hint { font-size: 11.5px; color: var(--td-muted); }
+.td-add-editor-foot { display: flex; align-items: center; gap: 6px; padding-top: 8px; margin-top: 2px; border-top: 1px solid var(--td-border); }
+.td-flex { flex: 1; }
+
+/* Sidebar "+ Add task": Todoist's red entry at the top. */
+.td-nav-item.td-nav-addtask { color: var(--td-accent); font-weight: 600; }
+.td-nav-add-icon { width: 18px; height: 18px; border-radius: 50%; background: var(--td-accent); color: var(--td-accent-fg) !important; display: grid; place-items: center; }

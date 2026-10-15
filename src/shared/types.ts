@@ -105,8 +105,8 @@ export type ListQuery = {
 export type TaskPage = {
   tasks: TaskRow[]
   nextCursor: string | null
-  /** True when the page was cut to fit the bridge budget; nextCursor then
-   *  resumes AFTER the last task we kept (see budget.ts). */
+  /** True when more tasks exist that cannot be paged to (a multi-query saved
+   *  filter); the view says "showing the first N". */
   truncated: boolean
 }
 
@@ -176,8 +176,30 @@ export type Settings = {
 /** Published by the runtime to every view. Views refetch their data whenever
  *  `revision` changes; it is bumped after every successful mutation from ANY
  *  view, which is how a quick-add in the modal shows up in the open panel. */
+/**
+ * One thing that changed, published by the runtime after a mutation SUCCEEDED
+ * (from any view), so every open view updates its lists in place instead of
+ * refetching everything (beta.4 refetched list + projects + labels + filters +
+ * sections on every tick of a checkbox — 5–12 td processes). `task` is the
+ * canonical row Todoist answered with; descriptions are clipped to the list
+ * preview length to keep the publication small.
+ */
+export type Change =
+  | { seq: number; kind: 'upsert'; task: TaskRow }
+  | { seq: number; kind: 'remove'; id: string; reason: 'completed' | 'deleted'; task: TaskRow | null }
+  | { seq: number; kind: 'comment'; taskId: string; comment: CommentRow }
+  | { seq: number; kind: 'meta' }
+
 export type HostState = {
+  /** Bumped only when EVERYTHING may be stale: account/td identity change,
+   *  explicit refresh. Views refetch their lists and meta on it. */
   revision: number
+  /** Bumped when projects/sections/labels/filters changed (or identity). */
+  metaRevision: number
+  /** The last `changes.length` changes, oldest first; `changeSeq` is the
+   *  newest seq. A view that missed changes older than the window revalidates. */
+  changeSeq: number
+  changes: Change[]
   setup: SetupStatus | null
   settings: Settings
 }

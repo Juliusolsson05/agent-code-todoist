@@ -26,36 +26,39 @@ If you already use `td` in a terminal you are signed in already.
 
 | | |
 | --- | --- |
-| **Todoist: Open** | The pane: sidebar, grouped task list, quick add, task drawer |
+| **Todoist: Open** | The pane: sidebar, grouped task list, inline add, task view |
 | **Todoist: Open in Modal** | The same workspace in a floating window, without giving up a pane |
 | **Todoist: Quick Add Task** (⌘⌥T) | Modal quick add from anywhere, with agent linking |
 | **Todoist: Refresh** | Reload every open Todoist view |
 
-In the pane:
+In the pane — it works like Todoist's own app: everything you do shows at once and
+syncs behind, lists you have seen open instantly, and it talks to Todoist directly
+(td is only used to sign in):
 
-- **Quick add** understands Todoist's syntax, and highlights the parts it will consume:
+- **+ Add task** (at the end of a list, in each project section, or `q`) understands Todoist's syntax, and highlights the parts it will consume:
   - `tomorrow 3pm` sets the date.
   - `p1` sets the priority.
   - `#Project`, `/Section` and `@label` file and tag the task.
   - `{deadline}` sets a deadline.
 
-  Tasks added in Today default to today. Tasks added in a project or label view land
-  there.
-- **The task drawer** opens when you click a task. You can:
+  Tasks added in Today default to today. Tasks added in a project, section or label
+  view land there.
+- **The task view** opens over the list when you click a task. You can:
   - edit the title and description (Markdown supported);
   - set the due date, deadline, duration, priority and labels;
   - move the task to another project or section;
   - add and complete sub-tasks;
   - read and write comments;
   - delete the task, or open it in Todoist.
-- **Complete with Undo.** Recurring tasks show their next date instead.
+- **Complete with Undo.** The row checks and folds away at once; Undo puts it back.
+  Several completions merge into one Undo. Recurring tasks move to their next date.
 - **Create** projects (with colour), sections and labels.
 
 ### Keyboard
 
 | Key | Action |
 | --- | --- |
-| `q` / `a` | Focus quick add |
+| `q` / `a` | Add task |
 | `/` | Search |
 | `j` `k` / `↓` `↑` | Move between tasks |
 | `Enter` / `o` | Open task |
@@ -66,7 +69,7 @@ In the pane:
 | `r` | Refresh |
 | `[` | Toggle sidebar |
 | `?` | All shortcuts |
-| `Esc` | Close drawer / search |
+| `Esc` | Close task view / search |
 
 ## Settings
 

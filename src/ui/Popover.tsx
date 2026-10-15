@@ -12,18 +12,23 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 're
 // consume calls preventDefault + stopPropagation so closing a menu never closes
 // the pane.
 
-export function Popover({ anchor, onClose, children, width = 260, align = 'start' }: {
+export function Popover({ anchor, onClose, children, width = 260, align = 'start', inline = false }: {
   anchor: HTMLElement | null
   onClose: () => void
   children: ReactNode
   width?: number
   align?: 'start' | 'end'
+  /** In flow instead of fixed-position. WHY: Agent Code sizes a modal from
+   *  its content and clips everything outside (frameDocument.ts reportSize);
+   *  a fixed menu does not count as content, so Quick Add's pickers were cut
+   *  off by 45–58% (evaluator 7). Inline, the menu pushes the modal taller. */
+  inline?: boolean
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState<{ top: number; left: number; maxHeight: number } | null>(null)
 
   useLayoutEffect(() => {
-    if (!anchor) return
+    if (!anchor || inline) return
     const place = () => {
       const rect = anchor.getBoundingClientRect()
       const height = ref.current?.offsetHeight ?? 240
@@ -41,7 +46,7 @@ export function Popover({ anchor, onClose, children, width = 260, align = 'start
     place()
     window.addEventListener('resize', place)
     return () => window.removeEventListener('resize', place)
-  }, [anchor, width, align])
+  }, [anchor, width, align, inline])
 
   useEffect(() => {
     const onPointer = (event: PointerEvent) => {
@@ -67,9 +72,9 @@ export function Popover({ anchor, onClose, children, width = 260, align = 'start
   return (
     <div
       ref={ref}
-      className="td-popover"
+      className={`td-popover${inline ? ' is-inline' : ''}`}
       role="dialog"
-      style={{ top: pos?.top ?? -9999, left: pos?.left ?? -9999, width: Math.min(width, window.innerWidth - 16), maxHeight: pos?.maxHeight }}
+      style={inline ? undefined : { top: pos?.top ?? -9999, left: pos?.left ?? -9999, width: Math.min(width, window.innerWidth - 16), maxHeight: pos?.maxHeight }}
     >
       {children}
     </div>

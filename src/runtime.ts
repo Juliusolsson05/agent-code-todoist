@@ -1,7 +1,8 @@
 import { defineRuntime, type JsonValue, type RuntimeContext } from 'agent-code-extension-api'
 
-import { collect, toJson } from './shared/budget'
-import type { HostState, SetupStatus, Settings, TaskPage } from './shared/types'
+import { collect, fitsBridge, LIST_DESCRIPTION_CHARS, toJson } from './shared/budget'
+import { applyChangeToIds, queryKey, type QueryContext } from './shared/listModel'
+import type { Change, CommentRow, HostState, ListQuery, Meta, SetupStatus, Settings, TaskPage, TaskRow } from './shared/types'
 import { tdErrorCode } from './shared/types'
 
 // The hidden runtime: the one owner of the td service and of "something changed".
@@ -31,10 +32,46 @@ const CHUNK = 'chunk'
  *  it. A dead service is normally reported at once ("not running"). */
 const RETRY_WITHIN_MS = 2_000
 const MUTATIONS = new Set([
-  'quickAdd', 'add', 'update', 'move', 'complete', 'uncomplete', 'delete', 'comment',
-  'createProject', 'createSection', 'createLabel', 'logout',
+  'quickAdd', 'addWithIntent', 'add', 'update', 'move', 'complete', 'uncomplete', 'delete', 'comment',
+  'createProject', 'createSection', 'createLabel',
 ])
-const SETUP = new Set(['login', 'install', 'cancelJob', 'openUrl'])
+const SETUP = new Set(['login', 'install', 'cancelJob', 'openUrl', 'logout'])
+/** How many recent changes the publication carries. A view that was busy (or
+ *  just mounted) and missed more than this simply revalidates its list. */
+const CHANGE_WINDOW = 40
+
+type ChangeDraft = Change extends infer C ? (C extends { seq: number } ? Omit<C, 'seq'> : never) : never
+
+/** What a successful mutation changed, from the canonical entity the service
+ *  returned (server/handlers.ts "Writes"). */
+function changesFor(name: string, input: unknown, result: unknown): ChangeDraft[] {
+  const p = (input ?? {}) as { id?: string; taskId?: string }
+  const r = (result ?? {}) as { task?: TaskRow | null }
+  switch (name) {
+    case 'quickAdd': case 'add': case 'update':
+      return result ? [{ kind: 'upsert', task: result as TaskRow }] : []
+    case 'addWithIntent': case 'move': case 'uncomplete':
+      return r.task ? [{ kind: 'upsert', task: r.task }] : []
+    case 'complete':
+      // A recurring task comes back OPEN at its next date; a normal one closed.
+      if (r.task && !r.task.completedAt) return [{ kind: 'upsert', task: r.task }]
+      return p.id ? [{ kind: 'remove', id: p.id, reason: 'completed', task: r.task ?? null }] : []
+    case 'delete':
+      return p.id ? [{ kind: 'remove', id: p.id, reason: 'deleted', task: null }] : []
+    case 'comment':
+      return p.taskId && result ? [{ kind: 'comment', taskId: p.taskId, comment: result as CommentRow }] : []
+    case 'createProject': case 'createSection': case 'createLabel':
+      return [{ kind: 'meta' }]
+    default:
+      return []
+  }
+}
+
+/** Keep publications small: the list only shows a description preview, and
+ *  views that need the full text (the task view) fetch the task. */
+function slim(task: TaskRow): TaskRow {
+  return task.description.length > LIST_DESCRIPTION_CHARS ? { ...task, description: `${task.description.slice(0, LIST_DESCRIPTION_CHARS - 1)}…` } : task
+}
 
 /** How often Agent Code's Settings page edits are noticed (see the watcher). */
 export const SETTINGS_WATCH_MS = 60_000
@@ -51,7 +88,15 @@ export default defineRuntime({
   async activate(context: RuntimeContext) {
     const { api } = context
     let revision = 1
+    let metaRevision = 1
+    let changeSeq = 0
+    let changes: Change[] = []
     let setup: SetupStatus | null = null
+    // First pages of recently seen lists and the last meta, so a view (a new
+    // pane, the modal, a view switch) paints instantly and revalidates in the
+    // background. Kept correct by the same change feed the views apply.
+    const listCache = new Map<string, { query: ListQuery; page: TaskPage }>()
+    let metaCache: Meta | null = null
     let settings: Settings = DEFAULT_SETTINGS
     let starting: Promise<void> | null = null
 
@@ -77,7 +122,7 @@ export default defineRuntime({
     }
 
     const publish = async () => {
-      const state: HostState = { revision, setup, settings }
+      const state: HostState = { revision, metaRevision, changeSeq, changes, setup, settings }
       await Promise.all(VIEWS.map(view => context.views.publish(view, toJson(state) as unknown as JsonValue).catch(() => {})))
     }
 
@@ -123,6 +168,14 @@ export default defineRuntime({
      *  used to keep account A's lists under account B's header (review). */
     const identity = (status: SetupStatus | null) => `${status?.state}|${status?.user?.id ?? ''}|${status?.td?.path ?? ''}`
 
+    /** A different account, td, or setup state: nothing cached is valid. */
+    const accountChanged = () => {
+      revision++
+      metaRevision++
+      forgetAccountData()
+      if (setup?.state === 'ready') prefetch()
+    }
+
     let setupSeq = 0
     const refreshSetup = async (refresh = false): Promise<SetupStatus> => {
       await readSettings()
@@ -135,9 +188,53 @@ export default defineRuntime({
       setup = next
       // Becoming ready (sign-in finished, td installed) or switching account /
       // td invalidates whatever the views showed before — bump so they reload.
-      if (before !== identity(setup)) revision++
+      if (before !== identity(setup)) accountChanged()
       await publish()
       return setup
+    }
+
+    const cacheContext = (): QueryContext => ({
+      now: new Date(),
+      inboxId: metaCache?.projects.find(p => p.isInbox)?.id ?? null,
+      userId: setup?.user?.id ?? null,
+    })
+
+    /** Record what changed, update the caches, publish once. */
+    const pushChanges = async (drafts: ChangeDraft[]) => {
+      if (!drafts.length) return
+      const ctx = cacheContext()
+      for (const draft of drafts) {
+        const change = { ...(draft.kind === 'upsert' ? { ...draft, task: slim(draft.task) } : draft), seq: ++changeSeq } as Change
+        changes.push(change)
+        if (change.kind === 'meta') { metaRevision++; metaCache = null; continue }
+        for (const entry of listCache.values()) {
+          const byId = new Map(entry.page.tasks.map(t => [t.id, t]))
+          const ids = applyChangeToIds(entry.page.tasks.map(t => t.id), entry.query, change, ctx, id => byId.get(id)?.parentId ?? null)
+          if (change.kind === 'upsert') byId.set(change.task.id, change.task)
+          if (change.kind === 'remove' && change.task) byId.set(change.id, change.task)
+          entry.page = { ...entry.page, tasks: ids.map(id => byId.get(id)).filter((t): t is TaskRow => !!t) }
+        }
+      }
+      if (changes.length > CHANGE_WINDOW) changes = changes.slice(-CHANGE_WINDOW)
+      await publish()
+    }
+
+    const forgetAccountData = () => {
+      listCache.clear()
+      metaCache = null
+      changes = []
+    }
+
+    /** Warm the caches once the account is known, so the first pane paints
+     *  from memory. Best-effort and quiet. */
+    const PREFETCH: ListQuery[] = [{ kind: 'today' }, { kind: 'inbox' }, { kind: 'upcoming' }]
+    const prefetch = () => {
+      void read<Meta>('meta').then(m => { if (fitsBridge(m)) metaCache = m }, () => {})
+      for (const query of PREFETCH) {
+        void read<TaskPage>('list', query as unknown as JsonValue).then(page => {
+          if (fitsBridge(page)) listCache.set(queryKey(query), { query, page })
+        }, () => {})
+      }
     }
 
     for (const name of [...READS, CHUNK, ...MUTATIONS, ...SETUP]) {
@@ -146,23 +243,33 @@ export default defineRuntime({
           const p = (input ?? {}) as { refresh?: boolean }
           return refreshSetup(p.refresh === true) as unknown as JsonValue
         }
+        // Instant answers from memory: `cached: true` never reaches the
+        // service; null means "nothing cached, ask normally".
+        const flags = (input ?? {}) as { cached?: boolean; cursor?: string | null }
+        if (flags.cached === true && name === 'list') {
+          return (listCache.get(queryKey(input as unknown as ListQuery))?.page ?? null) as unknown as JsonValue
+        }
+        if (flags.cached === true && name === 'meta') return metaCache as unknown as JsonValue
         try {
           const result = await invoke(name, input ?? undefined)
-          if (MUTATIONS.has(name)) {
-            revision++
-            await publish()
+          if (name === 'list' && !flags.cursor && result && fitsBridge(result)) {
+            const query = input as unknown as ListQuery
+            listCache.set(queryKey(query), { query: { kind: query.kind, id: query.id, query: query.query }, page: result as unknown as TaskPage })
           }
+          if (name === 'meta' && result && fitsBridge(result)) metaCache = result as unknown as Meta
+          if (MUTATIONS.has(name)) await pushChanges(changesFor(name, input, result))
           if (SETUP.has(name) && name !== 'openUrl') {
             ++setupSeq // newer than any status still in flight
             const before = identity(setup)
             setup = result as unknown as SetupStatus
-            if (before !== identity(setup)) revision++
+            if (before !== identity(setup)) accountChanged()
             await publish()
           }
           return result as JsonValue
         } catch (error) {
           const code = tdErrorCode(error)
-          // A timed-out mutation may have landed server-side: refetch.
+          // A timed-out mutation may have landed server-side: everything
+          // may be stale, so views revalidate.
           if (MUTATIONS.has(name) && code === 'TIMEOUT') {
             revision++
             await publish()

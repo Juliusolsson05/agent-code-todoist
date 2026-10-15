@@ -15,7 +15,9 @@ export function sameView(a: ViewKey, b: ViewKey): boolean {
   return a.kind === b.kind && (a.id ?? null) === (b.id ?? null) && (a.query ?? null) === (b.query ?? null)
 }
 
-export function Sidebar({ meta, current, counts, user, onSelect, onSearch, onCreateProject, onCreateLabel, onSignOut }: {
+export function Sidebar({ meta, current, counts, user, onSelect, onSearch, onAddTask, onCreateProject, onCreateLabel, onSignOut }: {
+  /** Opens the add-task editor (absent for read-only accounts). */
+  onAddTask?: () => void
   meta: Meta | null
   current: ViewKey
   counts: { today: number | null; inbox: number | null }
@@ -66,6 +68,11 @@ export function Sidebar({ meta, current, counts, user, onSelect, onSearch, onCre
   return (
     <nav className="td-sidebar" aria-label="Todoist navigation">
       <div className="td-nav-group">
+        {onAddTask && (
+          <button className="td-nav-item td-nav-addtask" onClick={onAddTask} title="Add task (q)">
+            <span className="td-nav-icon td-nav-add-icon"><PlusIcon size={14} /></span><span className="td-nav-label">Add task</span>
+          </button>
+        )}
         <button className="td-nav-item" onClick={onSearch} title="Search (/)">
           <span className="td-nav-icon"><SearchIcon /></span><span className="td-nav-label">Search</span><kbd>/</kbd>
         </button>

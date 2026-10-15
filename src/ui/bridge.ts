@@ -2,6 +2,7 @@ import type { JsonValue, ViewContext } from 'agent-code-extension-api'
 import { createContext, useContext, useEffect, useState } from 'react'
 
 import { collect } from '../shared/budget'
+import type { QuickAddIntent } from '../shared/quickAddPlan'
 
 import type {
   CommentRow,
@@ -34,17 +35,19 @@ type Calls = {
   cancelJob: [Record<string, never>, SetupStatus]
   logout: [Record<string, never>, SetupStatus]
   openUrl: [{ url: string }, { ok: true }]
-  meta: [Record<string, never>, Meta]
+  // `cached: true` asks the RUNTIME's memory only (instant; null = nothing).
+  meta: [{ cached?: boolean }, Meta | null]
   sections: [{ projectId: string }, SectionRow[]]
-  list: [ListQuery, TaskPage]
+  list: [ListQuery & { cached?: boolean }, TaskPage | null]
   task: [{ id: string }, TaskDetail]
   quickAdd: [{ text: string }, TaskRow]
+  addWithIntent: [{ text: string; intent: QuickAddIntent }, { task: TaskRow; partial: string | null }]
   add: [TaskDraft, TaskRow]
   update: [{ id: string } & TaskPatch, TaskRow]
-  move: [{ id: string; projectId?: string; sectionId?: string; parentId?: string; noSection?: boolean; noParent?: boolean }, { ok: true }]
-  complete: [{ id: string }, { ok: true }]
-  uncomplete: [{ id: string }, { ok: true }]
-  delete: [{ id: string }, { ok: true }]
+  move: [{ id: string; projectId?: string; sectionId?: string; parentId?: string; noSection?: boolean; noParent?: boolean }, { ok: true; task: TaskRow | null }]
+  complete: [{ id: string }, { ok: true; task: TaskRow | null }]
+  uncomplete: [{ id: string }, { ok: true; task: TaskRow | null }]
+  delete: [{ id: string }, { ok: true; id: string }]
   comment: [{ taskId: string; content: string }, CommentRow]
   createProject: [{ name: string; color?: string; parentId?: string; favorite?: boolean }, ProjectRow]
   createSection: [{ projectId: string; name: string }, SectionRow]

@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { colorHex, PRIORITY_COLORS } from '../shared/colors'
 import { isAgentSession } from '../shared/agents'
-import { applyFollowUps, PartialAdd, planFollowUps } from '../shared/quickAddPlan'
 import { contentPreview, tokenize } from '../shared/quickAddTokens'
 import type { AgentLink, ApiPriority, Meta, SectionRow } from '../shared/types'
 import { tdErrorMessage } from '../shared/types'
@@ -94,43 +93,40 @@ export function QuickAddModal() {
     setBusy(true)
     setError(null)
     // The line goes to Todoist's parser untouched; the pickers are applied
-    // afterwards where the parser did not already (src/shared/quickAddPlan.ts
-    // explains why appending " tomorrow p1" to the text was wrong).
-    let created
-    try {
-      created = await bridge.call('quickAdd', { text: line })
-    } catch (e) {
-      setError(tdErrorMessage(e)) // nothing created: keep the text for a retry
-      setBusy(false)
-      return
-    }
+    // after it, in the SAME request (server addWithIntent): one change for
+    // every open view instead of two or three (src/shared/quickAddPlan.ts).
     const inboxId = baseMeta?.projects.find(p => p.isInbox)?.id ?? null
-    const finish = () => {
-      setText('')
-      setAdded(created.content)
-      setTimeout(() => setAdded(null), 2500)
-      input.current?.focus()
-    }
+    const submitted = line
+    // Clear at submit: "add another" (⇧↵) can be typed while this one saves.
+    setText('')
     try {
-      await applyFollowUps(created, planFollowUps(created, {
-        due: due || null,
-        priority,
-        labels,
-        projectId: target?.projectId ?? null,
-        sectionId: target?.sectionId ?? null,
-        inboxId,
-        note: agent ? agentNote(agent) : null,
-      }), {
-        update: input => bridge.call('update', input),
-        move: input => bridge.call('move', input),
+      const result = await bridge.call('addWithIntent', {
+        text: submitted,
+        intent: {
+          due: due || null,
+          priority,
+          labels,
+          projectId: target?.projectId ?? null,
+          sectionId: target?.sectionId ?? null,
+          inboxId,
+          note: agent ? agentNote(agent) : null,
+        },
       })
-      if (keepOpen) finish()
-      else await bridge.context.api.ui.close()
+      if (result.partial) {
+        // The task exists: say exactly what did not happen; never re-add.
+        setError(result.partial)
+      } else if (keepOpen) {
+        setAdded(result.task.content)
+        setTimeout(() => setAdded(null), 2500)
+      } else {
+        await bridge.context.api.ui.close()
+        return
+      }
+      input.current?.focus()
     } catch (e) {
-      // The task exists; clear the field so Enter cannot add it twice, keep
-      // the modal open and say exactly what did not happen.
-      finish()
-      setError(e instanceof PartialAdd ? `${e.message} ${tdErrorMessage(e.cause)}` : tdErrorMessage(e))
+      // Nothing was created: give the text back unless a new line was started.
+      setText(current => current || submitted)
+      setError(tdErrorMessage(e))
     } finally {
       setBusy(false)
     }
@@ -174,6 +170,16 @@ export function QuickAddModal() {
           </button>
           <button ref={refs.labels} className={`td-qa-chip${labels.length ? ' is-set' : ''}`} onClick={() => setMenu('labels')}><LabelIcon size={13} />{labels.length ? labels.join(', ') : 'Labels'}</button>
         </div>
+        {/* Inline: Agent Code sizes this modal from its content and clips
+            anything floating outside it (evaluator 7: pickers 45–58% cut off). */}
+        {menu === 'due' && <DuePicker inline anchor={refs.due.current} current={due} onPick={setDue} onClose={() => setMenu(null)} />}
+        {menu === 'priority' && <PriorityPicker inline anchor={refs.priority.current} current={priority} onPick={setPriority} onClose={() => setMenu(null)} />}
+        {menu === 'labels' && meta && (
+          <LabelPicker inline anchor={refs.labels.current} labels={meta.labels} selected={labels} onChange={setLabels}
+            onCreate={async name => { await bridge.call('createLabel', { name }); setMeta(await bridge.call('meta', {})) }}
+            onClose={() => setMenu(null)} />
+        )}
+        {menu === 'project' && meta && <ProjectPicker inline anchor={refs.project.current} meta={meta} current={target ?? undefined} onPick={setTarget} onClose={() => setMenu(null)} />}
 
         {agents.length > 0 && (
           <div className="td-qa-agents">
@@ -210,14 +216,6 @@ export function QuickAddModal() {
         </div>
       </div>
 
-      {menu === 'due' && <DuePicker anchor={refs.due.current} current={due} onPick={setDue} onClose={() => setMenu(null)} />}
-      {menu === 'priority' && <PriorityPicker anchor={refs.priority.current} current={priority} onPick={setPriority} onClose={() => setMenu(null)} />}
-      {menu === 'labels' && meta && (
-        <LabelPicker anchor={refs.labels.current} labels={meta.labels} selected={labels} onChange={setLabels}
-          onCreate={async name => { await bridge.call('createLabel', { name }); setMeta(await bridge.call('meta', {})) }}
-          onClose={() => setMenu(null)} />
-      )}
-      {menu === 'project' && meta && <ProjectPicker anchor={refs.project.current} meta={meta} current={target ?? undefined} onPick={setTarget} onClose={() => setMenu(null)} />}
     </div>
   )
 }

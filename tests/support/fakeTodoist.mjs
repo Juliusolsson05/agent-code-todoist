@@ -146,8 +146,11 @@ export class FakeTodoist {
   }
 
   /** Make the next `times` requests matching `match` fail with `status`. */
-  fail(match, { status = 500, body = { error: 'Fake failure' }, times = Infinity, delayMs = 0 } = {}) {
-    this.faults.push({ match, status, body, times, delayMs })
+  /** Inject a fault. `delayOnly: true` makes it a SLOW request instead: the
+   *  request is processed normally after `delayMs` (a plain fault answers
+   *  without ever applying the request, which cannot test write ordering). */
+  fail(match, { status = 500, body = { error: 'Fake failure' }, times = Infinity, delayMs = 0, delayOnly = false } = {}) {
+    this.faults.push({ match, status, body, times, delayMs, delayOnly })
   }
 
   requestsTo(method, pathPrefix) {
@@ -237,21 +240,24 @@ export class FakeTodoist {
           res.end(JSON.stringify(payload))
         }
         const fault = this.faults.find(f => f.times > 0 && f.match(entry))
+        const handle = () => {
+          if (entry.auth !== `Bearer ${this.token}`) return send(401, { error: 'Unauthorized', error_code: 477, http_code: 401 })
+          try {
+            const result = this.route(entry)
+            if (result === undefined) {
+              this.unhandled.push(`${entry.method} ${entry.path}`)
+              return send(501, { error: `fake does not implement ${entry.method} ${entry.path}` })
+            }
+            send(result.status ?? 200, result.body)
+          } catch (error) {
+            send(error.status ?? 500, { error: error.message })
+          }
+        }
         if (fault) {
           fault.times--
-          return setTimeout(() => send(fault.status, fault.body), fault.delayMs)
+          return setTimeout(() => (fault.delayOnly ? handle() : send(fault.status, fault.body)), fault.delayMs)
         }
-        if (entry.auth !== `Bearer ${this.token}`) return send(401, { error: 'Unauthorized', error_code: 477, http_code: 401 })
-        try {
-          const result = this.route(entry)
-          if (result === undefined) {
-            this.unhandled.push(`${entry.method} ${entry.path}`)
-            return send(501, { error: `fake does not implement ${entry.method} ${entry.path}` })
-          }
-          send(result.status ?? 200, result.body)
-        } catch (error) {
-          send(error.status ?? 500, { error: error.message })
-        }
+        handle()
       })
     })
   }

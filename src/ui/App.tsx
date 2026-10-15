@@ -1,36 +1,35 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { colorHex } from '../shared/colors'
-import { groupByDay, groupCompleted, groupToday, type TaskGroup } from '../shared/dates'
-import { applyFollowUps, PartialAdd, planFollowUps } from '../shared/quickAddPlan'
-import type { ApiPriority, ListQuery, Meta, SectionRow, TaskRow } from '../shared/types'
+import { queryKey, type QueryContext } from '../shared/listModel'
+import type { QuickAddIntent } from '../shared/quickAddPlan'
+import type { ApiPriority, HostState, ListQuery, TaskRow, UserRow } from '../shared/types'
 import { tdErrorCode, tdErrorMessage } from '../shared/types'
+import { AddTask, type AddTaskHandle } from './AddTask'
 import { useBridge, useHostState, useNow, usePersistent } from './bridge'
+import { CloseIcon, ExternalIcon, InboxIcon, KeyboardIcon, PlusIcon, RefreshIcon, SearchIcon, SidebarIcon } from './Icons'
 import { isActivatable, onKeyAfterReact } from './keys'
-import { CloseIcon, ExternalIcon, InboxIcon, KeyboardIcon, PlusIcon, RefreshIcon, SearchIcon, SidebarIcon, TrashIcon } from './Icons'
-import { QuickAddBar, type QuickAddHandle } from './QuickAddBar'
+import { buildGroups, DeleteConfirm, EmptyState, ListSkeleton, ShortcutHelp, Toasts, useToasts, viewTitle, type Deleting } from './listParts'
 import { SetupScreen } from './SetupScreen'
 import { Sidebar, sameView } from './Sidebar'
+import { useStore } from './store'
 import { TaskDetailPanel } from './TaskDetail'
-import { TaskItem, type Lookup } from './TaskItem'
+import { TaskItem, type Lookup, type RowActions } from './TaskItem'
+import { useFlip } from './useFlip'
+import { useTaskActions } from './useTaskActions'
+import { useChangeFeed, useListLoader, useMeta } from './useWorkspaceData'
 
-// The Todoist pane.
+// The Todoist workspace (pane and modal).
 //
-// State ownership, from slowest-changing to fastest:
-//   host (runtime publication)  setup status, settings, `revision`
-//   meta                        projects/sections/labels/filters — refetched on revision
-//   view                        which list is shown — starts at the "Open on" setting
-//   page                        the tasks of that list — refetched on view/revision,
-//                               keeping as many pages as the user had loaded
-//   completing / toasts / focus purely local UI
-//
-// The one rule that keeps this coherent: after ANY successful mutation, the
-// runtime bumps `revision` and every open view refetches. Optimistic local
-// changes only bridge the ~0.5–1.5 s a td round-trip takes.
-
-type Toast = { id: number; message: string; tone?: 'error'; action?: { label: string; run: () => void } }
-
-const COMPLETE_ANIMATION_MS = 650
+// Local-first, like Todoist's own app (plan: "Rebuild for feel"):
+//   store (store.ts)        every list seen, every task, optimistic state —
+//                           survives view switches; views are reads of it
+//   change feed (runtime)   what Todoist answered after ANY view's edit;
+//                           applied in place, no refetch
+//   revalidation            quiet: on view switch, focus, every 60 s, and
+//                           when the feed has a gap — never empties a list,
+//                           never hides the count, never spins
+//   actions                 applied at once, synced behind (useTaskActions)
 
 /** `modal`: the same workspace in a floating dialog (`todoist.window`). The
  *  host sizes a modal from its content, so the modal root has a fixed natural
@@ -54,63 +53,49 @@ export function App({ variant = 'pane' }: { variant?: AppVariant } = {}) {
       </div>
     )
   }
-  return <Workspace variant={variant} revision={host!.revision} defaultView={host!.settings.defaultView} now={now} user={host!.setup!.user} />
+  return <Workspace variant={variant} host={host!} now={now} user={host!.setup!.user} />
 }
 
 const rootClass = (variant: AppVariant, extra = '') => `td-root${variant === 'modal' ? ' td-window-root' : ''}${extra}`
 
-function Workspace({ variant, revision, defaultView, now, user }: { variant: AppVariant; revision: number; defaultView: 'today' | 'upcoming' | 'inbox'; now: Date; user: import('../shared/types').UserRow | null }) {
+/** True once `active` has stayed true for `ms` (a skeleton only for loads
+ *  long enough to notice; fast loads show nothing instead of a flash). */
+function useDelayed(active: boolean, ms: number): boolean {
+  const [shown, setShown] = useState(false)
+  useEffect(() => {
+    if (!active) { setShown(false); return }
+    const timer = setTimeout(() => setShown(true), ms)
+    return () => clearTimeout(timer)
+  }, [active, ms])
+  return shown
+}
+
+function Workspace({ variant, host, now, user }: { variant: AppVariant; host: HostState; now: Date; user: UserRow | null }) {
   const bridge = useBridge()
-  // Not persisted: Settings has an "Open on" row, and a remembered last view
-  // made it do nothing after the first session (review of PR #2). Within one
-  // open pane the view is plain state.
-  const [view, setView] = useState<ListQuery>({ kind: defaultView })
+  const s = useStore()
+  // Not persisted: Settings has an "Open on" row (review of PR #2).
+  const [view, setView] = useState<ListQuery>({ kind: host.settings.defaultView })
+  const key = queryKey(view)
   const [sidebarPref, setSidebarPref] = usePersistent<boolean>(bridge, 'todoist.ui.sidebar', true)
-  const [baseMeta, setMeta] = useState<Meta | null>(null)
-  // Sections arrive per project (td cannot list them account-wide; see
-  // server/handlers.ts meta). Cached by project and merged into one Meta so
-  // every consumer — grouping, row chips, pickers, drawer — reads one shape.
-  const [sectionCache, setSectionCache] = useState<Record<string, SectionRow[]>>({})
-  const [tasks, setTasks] = useState<TaskRow[]>([])
-  const [cursor, setCursor] = useState<string | null>(null)
-  const [truncated, setTruncated] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [loadingMore, setLoadingMore] = useState(false)
-  const [listError, setListError] = useState<string | null>(null)
-  const [counts, setCounts] = useState<{ today: number | null; inbox: number | null }>({ today: null, inbox: null })
-  const [completing, setCompleting] = useState<Set<string>>(new Set())
+  const { meta, ensureSections, setMeta } = useMeta(bridge, host.metaRevision)
   const [focusId, setFocusId] = useState<string | null>(null)
   const [openId, setOpenId] = useState<string | null>(null)
-  const [toasts, setToasts] = useState<Toast[]>([])
   const [searching, setSearching] = useState(false)
   const [searchText, setSearchText] = useState('')
   const [width, setWidth] = useState(() => window.innerWidth)
   const [overlaySidebar, setOverlaySidebar] = useState(false)
   const [help, setHelp] = useState(false)
-  /** The task waiting for a delete confirmation (⌫ / Delete / row trash).
-   *  `task`/`subtasks` are filled from the server (see requestDelete). */
   const [deleting, setDeleting] = useState<Deleting | null>(null)
-  // The view a late callback should act on is the CURRENT one, not the one
-  // captured when it was created (a failed delete once refetched Today's
-  // tasks into the Inbox the user had moved to — review).
-  const viewRef = useRef(view)
-  viewRef.current = view
   const [addingSection, setAddingSection] = useState<string | null>(null)
-  const quickAdd = useRef<QuickAddHandle>(null)
+  const sectionSubmitting = useRef(false)
+  const addTask = useRef<AddTaskHandle>(null)
   const searchInput = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
-  const requestSeq = useRef(0)
-  /** Pages of the current list loaded so far ("Load more" adds one). A refetch
-   *  after a mutation reloads the same number, so acting on a task from page 2
-   *  does not snap the list back to page 1 and lose the user's place. */
-  const pagesLoaded = useRef(1)
-  /** Ids with a complete/reopen in flight. A ref, not state: the second click
-   *  of a double click arrives before React re-renders, and two `complete`
-   *  calls on a recurring task advance it twice (skipping an occurrence). */
-  const toggling = useRef(new Set<string>())
+  const viewRef = useRef(view)
+  viewRef.current = view
+  const { toasts, toast, dismiss } = useToasts()
 
   const narrow = width < 640
-  const drawerOverlays = width < 820
   const sidebarVisible = narrow ? overlaySidebar : sidebarPref
 
   useEffect(() => {
@@ -119,15 +104,9 @@ function Workspace({ variant, revision, defaultView, now, user }: { variant: App
     return () => window.removeEventListener('resize', onResize)
   }, [])
 
-  const toast = useCallback((message: string, extra: Partial<Toast> = {}) => {
-    const id = Date.now() + Math.random()
-    setToasts(list => [...list.slice(-2), { id, message, ...extra }])
-    setTimeout(() => setToasts(list => list.filter(t => t.id !== id)), extra.action ? 6000 : extra.tone === 'error' ? 7000 : 3000)
-  }, [])
-
   const fail = useCallback((error: unknown) => {
-    // Sign-out / td removal are handled by the runtime re-checking setup (the
-    // whole pane swaps to the setup screen); a toast would just flash first.
+    // Sign-out / td removal: the runtime re-checks setup and the whole pane
+    // swaps to the setup screen; a toast would just flash first.
     const code = tdErrorCode(error)
     if (code === 'NO_TOKEN' || code === 'AUTH' || code === 'TD_NOT_FOUND') return
     toast(tdErrorMessage(error), { tone: 'error' })
@@ -135,79 +114,44 @@ function Workspace({ variant, revision, defaultView, now, user }: { variant: App
 
   const openUrl = useCallback((url: string) => { void bridge.call('openUrl', { url }).catch(fail) }, [bridge, fail])
 
-  // ---- data -------------------------------------------------------------
+  const inboxId = meta?.projects.find(p => p.isInbox)?.id ?? null
+  const ctx: QueryContext = useMemo(() => ({ now, inboxId, userId: user?.id ?? null }), [now, inboxId, user?.id])
+
+  // ---- data ---------------------------------------------------------------
+  const { revalidate, loadMore } = useListLoader(bridge)
+  const quietly = useCallback((query: ListQuery, cacheFirst = false) => { void revalidate(query, { cacheFirst }).catch(() => {}) }, [revalidate])
+
+  // Switching list: show what the store has, ask behind it.
+  useEffect(() => { quietly(view, true) }, [key]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Everything may be stale (account/td change, explicit refresh).
+  const firstRevision = useRef(host.revision)
   useEffect(() => {
-    let alive = true
-    bridge.call('meta', {}).then(m => { if (alive) setMeta(m) }, fail)
-    return () => { alive = false }
-  }, [bridge, revision, fail])
-
-  const ensureSections = useCallback((projectId: string) => {
-    void bridge.call('sections', { projectId }).then(
-      list => setSectionCache(cache => ({ ...cache, [projectId]: list })),
-      () => {},
-    )
-  }, [bridge])
-
-  const meta = useMemo<Meta | null>(
-    () => (baseMeta ? { ...baseMeta, sections: Object.values(sectionCache).flat() } : null),
-    [baseMeta, sectionCache],
-  )
-
-  const load = useCallback(async (query: ListQuery, mode: 'reset' | 'refresh' | 'append' = 'reset', from: string | null = null) => {
-    const seq = ++requestSeq.current
-    const append = mode === 'append'
-    if (append) setLoadingMore(true)
-    else setLoading(true)
-    try {
-      let page = await bridge.call('list', { ...query, cursor: append ? from : null })
-      let rows = page.tasks
-      if (mode === 'refresh') {
-        // Reload as many pages as were showing before the change.
-        for (let n = 1; n < pagesLoaded.current && page.nextCursor && seq === requestSeq.current; n++) {
-          page = await bridge.call('list', { ...query, cursor: page.nextCursor })
-          rows = [...rows, ...page.tasks.filter(t => !rows.some(r => r.id === t.id))]
-        }
-      }
-      // A slower response for a view the user already left must not overwrite
-      // the current one.
-      if (seq !== requestSeq.current) return
-      if (append) pagesLoaded.current += 1
-      else if (mode === 'reset') pagesLoaded.current = 1
-      setTasks(current => (append ? [...current, ...rows.filter(t => !current.some(c => c.id === t.id))] : rows))
-      setCursor(page.nextCursor)
-      setTruncated(page.truncated)
-      setListError(null)
-      if (!append && (query.kind === 'today' || query.kind === 'inbox')) {
-        const open = rows.filter(t => !t.completedAt).length
-        setCounts(c => ({ ...c, [query.kind]: page.nextCursor ? null : open }))
-      }
-    } catch (error) {
-      if (seq !== requestSeq.current) return
-      setListError(tdErrorMessage(error))
-      fail(error)
-    } finally {
-      if (seq === requestSeq.current) {
-        setLoading(false)
-        setLoadingMore(false)
-      }
-    }
-  }, [bridge, fail])
-
-  const viewKey = JSON.stringify(view)
-  const lastLoaded = useRef<string | null>(null)
+    if (host.revision === firstRevision.current) return
+    firstRevision.current = host.revision
+    quietly(viewRef.current)
+  }, [host.revision, quietly])
+  // Changes made in Todoist itself (phone, web): revalidate on focus and
+  // every minute while visible — quietly.
   useEffect(() => {
-    // Same view, new revision = something changed: keep the user's pages.
-    const sameList = lastLoaded.current === viewKey
-    lastLoaded.current = viewKey
-    void load(view, sameList ? 'refresh' : 'reset')
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewKey, revision, load])
+    const again = () => { if (document.visibilityState === 'visible') quietly(viewRef.current) }
+    window.addEventListener('focus', again)
+    document.addEventListener('visibilitychange', again)
+    const timer = setInterval(again, 60_000)
+    return () => { window.removeEventListener('focus', again); document.removeEventListener('visibilitychange', again); clearInterval(timer) }
+  }, [quietly])
+  useChangeFeed(host, ctx, () => quietly(viewRef.current))
 
-  // ---- lookups ----------------------------------------------------------
+  const currentProjectId = view.kind === 'project' ? view.id : view.kind === 'inbox' ? inboxId ?? undefined : undefined
+  const currentProject = currentProjectId ? meta?.projects.find(p => p.id === currentProjectId) : undefined
+  useEffect(() => { if (currentProjectId) ensureSections(currentProjectId) }, [currentProjectId, ensureSections])
+
+  // ---- the list ----------------------------------------------------------
+  const state = s.query(key)
+  const rows = s.rows(key, ctx)
+  const showSkeleton = useDelayed(!state || state.status === 'empty', 150)
   const lookup: Lookup = useMemo(() => {
     const projects = new Map(meta?.projects.map(p => [p.id, p]))
-    const sections = new Map(meta?.sections.map(s => [s.id, s]))
+    const sections = new Map(meta?.sections.map(sec => [sec.id, sec]))
     const labels = new Map(meta?.labels.map(l => [l.name, l]))
     return {
       project: id => projects.get(id),
@@ -215,143 +159,65 @@ function Workspace({ variant, revision, defaultView, now, user }: { variant: App
       label: name => labels.get(name),
     }
   }, [meta])
-
-  const inboxProject = meta?.projects.find(p => p.isInbox)
-  const currentProjectId = view.kind === 'project' ? view.id : view.kind === 'inbox' ? inboxProject?.id : undefined
-  const currentProject = currentProjectId ? lookup.project(currentProjectId) : undefined
-
-  useEffect(() => {
-    if (currentProjectId) ensureSections(currentProjectId)
-  }, [currentProjectId, revision, ensureSections])
-
-  // ---- grouping ---------------------------------------------------------
-  const { groups, depths, childCounts } = useMemo(() => buildGroups(view, tasks, now, meta, currentProjectId), [view, tasks, now, meta, currentProjectId])
+  const { groups, depths, childCounts } = useMemo(() => buildGroups(view, rows, now, meta, currentProjectId), [view, rows, now, meta, currentProjectId])
   const flat = useMemo(() => groups.flatMap(g => g.tasks), [groups])
+  useFlip(listRef, flat.map(t => t.id).join(','), key)
 
-  // ---- actions ----------------------------------------------------------
-  /** Complete or reopen. Resolves to whether the server accepted it, so the
-   *  drawer can reload instead of painting a result that did not happen. */
-  const toggle = useCallback(async (task: TaskRow): Promise<boolean> => {
-    if (toggling.current.has(task.id)) return false
-    toggling.current.add(task.id)
-    const done = () => { toggling.current.delete(task.id) }
-    if (task.completedAt) {
-      try {
-        await bridge.call('uncomplete', { id: task.id })
-        toast('Task reopened')
-        return true
-      } catch (error) { fail(error); return false } finally { done() }
-    }
-    setCompleting(set => new Set(set).add(task.id))
-    try {
-      await bridge.call('complete', { id: task.id })
-      toast(task.due?.recurring ? `Completed — next: ${task.due.string}` : 'Task completed', {
-        action: task.due?.recurring ? undefined : {
-          label: 'Undo',
-          run: () => { void bridge.call('uncomplete', { id: task.id }).then(() => toast('Task reopened'), fail) },
-        },
+  // Sidebar counts from the store (always the same numbers as the lists).
+  const todayState = s.query('today::')
+  const inboxState = s.query('inbox::')
+  const counts = {
+    today: todayState?.status === 'ready' && !todayState.cursor ? s.rows('today::', ctx).filter(t => !s.phase(t.id)).length : null,
+    inbox: inboxState?.status === 'ready' && !inboxState.cursor ? s.rows('inbox::', ctx).filter(t => !s.phase(t.id)).length : null,
+  }
+
+  // ---- actions ------------------------------------------------------------
+  const flatRef = useRef(flat)
+  flatRef.current = flat
+  const actions = useTaskActions(bridge, {
+    toast,
+    fail,
+    onGone: id => {
+      // Keep a usable selection: the next surviving row, else the previous.
+      setFocusId(current => {
+        if (current !== id) return current
+        const list = flatRef.current
+        const index = list.findIndex(t => t.id === id)
+        const next = list.slice(index + 1).find(t => !s.isHidden(t.id)) ?? list.slice(0, Math.max(0, index)).reverse().find(t => !s.isHidden(t.id))
+        return next?.id ?? null
       })
-      // Keep the guard up until the fade-out ends: the row still shows (as
-      // "Reopen") and a click there must not send a second complete.
-      setTimeout(() => {
-        setCompleting(set => { const next = new Set(set); next.delete(task.id); return next })
-        done()
-      }, COMPLETE_ANIMATION_MS)
-      return true
-    } catch (error) {
-      setCompleting(set => { const next = new Set(set); next.delete(task.id); return next })
-      done()
-      fail(error)
-      return false
-    }
-  }, [bridge, toast, fail])
+      setOpenId(current => (current === id && !s.task(id)?.due?.recurring ? null : current))
+    },
+  })
 
-  const patch = useCallback(async (task: TaskRow, change: { due?: string; priority?: ApiPriority }) => {
-    // Optimistic only for priority (unambiguous); due needs the server's parse.
-    if (change.priority !== undefined) setTasks(list => list.map(t => (t.id === task.id ? { ...t, priority: change.priority! } : t)))
-    try {
-      await bridge.call('update', { id: task.id, ...change })
-    } catch (error) {
-      fail(error)
-      void load(view, 'refresh')
-    }
-  }, [bridge, fail, load, view])
-
-  const submitQuickAdd = useCallback(async (text: string): Promise<boolean> => {
-    // The typed line goes to Todoist's parser untouched; making the task land
-    // IN the current view (like Todoist's own per-view quick add) is done
-    // afterwards from what the parser returned — see src/shared/quickAddPlan.ts.
-    let created
-    try {
-      created = await bridge.call('quickAdd', { text })
-    } catch (error) {
-      fail(error)
-      return false // nothing was created: keep the text for a retry
-    }
-    try {
-      await applyFollowUps(created, planFollowUps(created, {
-        due: view.kind === 'today' ? 'today' : null,
-        labels: view.kind === 'label' && view.query ? [view.query] : [],
-        projectId: view.kind === 'project' ? view.id : null,
-        inboxId: inboxProject?.id ?? null,
-      }), {
-        update: input => bridge.call('update', input),
-        move: input => bridge.call('move', input),
-      })
-      toast(`Added “${created.content}”`, { action: { label: 'Open', run: () => setOpenId(created.id) } })
-    } catch (error) {
-      // The task EXISTS. Clear the input anyway (return true): a retry would
-      // create a duplicate. Say exactly what is missing and offer the task.
-      const message = error instanceof PartialAdd ? `${error.message} ${tdErrorMessage(error.cause)}` : tdErrorMessage(error)
-      toast(message, { tone: 'error', action: { label: 'Open', run: () => setOpenId(created.id) } })
-    }
-    return true
-  }, [bridge, view, toast, fail, inboxProject?.id])
-
-  // Delete always asks first: Todoist's API has no undelete, so the Undo toast
-  // that completing gets is impossible here, and ⌫ is easy to hit by accident.
-  //
-  // The confirmation states what the SERVER will delete: the task and every
-  // sub-task, fetched with the task — not counted from the visible list. A
-  // filtered view (Today) can hide a child due tomorrow, and the first version
-  // said "will be deleted" without mentioning it (review). Until the detail
-  // arrives the dialog says "and any sub-tasks".
   const requestDelete = useCallback((id: string, row?: TaskRow) => {
-    setDeleting({ id, task: row ?? null, subtasks: null })
+    setDeleting({ id, task: row ?? s.task(id) ?? null, subtasks: null })
     bridge.call('task', { id }).then(
       detail => setDeleting(current => (current?.id === id ? { id, task: detail.task, subtasks: detail.children.length } : current)),
-      () => {}, // keep the cautious wording; deleting still works
+      () => {},
     )
-  }, [bridge])
+  }, [bridge, s])
 
-  const confirmDelete = useCallback(async (target: Deleting) => {
-    setDeleting(null)
-    // The task and everything nested under it leave the list at once (the
-    // server deletes the whole subtree); a failure brings them back by refetch.
-    const removed = new Set([target.id])
-    for (let grew = true; grew;) {
-      grew = false
-      for (const t of tasks) if (t.parentId && removed.has(t.parentId) && !removed.has(t.id)) { removed.add(t.id); grew = true }
-    }
-    setTasks(list => list.filter(t => !removed.has(t.id)))
-    if (openId && removed.has(openId)) setOpenId(null)
-    // Keep a usable selection: the next SURVIVING row, else the previous one
-    // (the next row used to be the deleted child, leaving nothing focused).
-    const index = flat.findIndex(t => t.id === target.id)
-    if (index >= 0 || (focusId && removed.has(focusId))) {
-      const from = index >= 0 ? index : flat.findIndex(t => t.id === focusId)
-      const successor = flat.slice(from + 1).find(t => !removed.has(t.id)) ?? flat.slice(0, Math.max(0, from)).reverse().find(t => !removed.has(t.id))
-      setFocusId(successor?.id ?? null)
-    }
-    const name = target.task?.content ?? 'task'
-    try {
-      await bridge.call('delete', { id: target.id })
-      toast(`Deleted “${name}”`)
-    } catch (error) {
-      fail(error)
-      void load(viewRef.current, 'refresh')
-    }
-  }, [bridge, toast, fail, load, openId, focusId, flat, tasks])
+  const rowActions: RowActions = useMemo(() => ({
+    toggle: task => actions.complete(task),
+    open: task => { setFocusId(task.id); setOpenId(task.id) },
+    focus: task => setFocusId(task.id),
+    patch: (task, patch) => { void actions.update(task, patch).catch(() => {}) },
+    remove: user?.readOnly ? undefined : task => { setFocusId(task.id); requestDelete(task.id, task) },
+    openUrl,
+  }), [actions, user?.readOnly, requestDelete, openUrl])
+
+  /** What adding a task HERE implies: Today → due today; a project (or one
+   *  of its sections) → that project; a label view → that label. */
+  const intentHere = useCallback((sectionId?: string | null): QuickAddIntent => ({
+    due: view.kind === 'today' ? 'today' : null,
+    labels: view.kind === 'label' && view.query ? [view.query] : [],
+    projectId: view.kind === 'project' ? view.id ?? null : null,
+    sectionId: sectionId ?? null,
+    inboxId,
+  }), [view, inboxId])
+
+  const submitAdd = useCallback((text: string, intent: QuickAddIntent) => actions.add(text, intent, viewRef.current), [actions])
 
   const createLabel = useCallback(async (name: string) => {
     try {
@@ -363,104 +229,90 @@ function Workspace({ variant, revision, defaultView, now, user }: { variant: App
     setSearching(false)
     setOverlaySidebar(false)
     setFocusId(null)
-    if (!sameView(next, view)) {
-      setTasks([])
-      setCursor(null)
-      setView(next)
-    } else {
-      void load(next, 'reset')
-    }
+    if (sameView(next, viewRef.current)) quietly(next)
+    else setView(next)
     listRef.current?.scrollTo({ top: 0 })
-  }, [view, setView, load])
+  }, [quietly])
 
   // Search: debounce typing into a `search` view.
   useEffect(() => {
     if (!searching) return
     const q = searchText.trim()
     if (!q) return
-    const id = setTimeout(() => {
-      setTasks([])
-      setView({ kind: 'search', query: q })
-    }, 350)
-    return () => clearTimeout(id)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const timer = setTimeout(() => setView({ kind: 'search', query: q }), 250)
+    return () => clearTimeout(timer)
   }, [searchText, searching])
 
   const closeSearch = useCallback(() => {
     setSearching(false)
     setSearchText('')
-    // Leaving search also leaves the search RESULTS, or the title would keep
-    // saying "Search: foo" over a list the user dismissed.
-    if (view.kind === 'search') { setTasks([]); setView({ kind: defaultView }) }
-  }, [view.kind, defaultView])
+    if (viewRef.current.kind === 'search') setView({ kind: host.settings.defaultView })
+  }, [host.settings.defaultView])
 
-  // ---- keyboard ---------------------------------------------------------
+  const refreshAll = useCallback(() => {
+    quietly(viewRef.current)
+    void bridge.call('meta', {}).then(m => { if (m) setMeta(m) }, () => {})
+  }, [bridge, quietly, setMeta])
+
+  // ---- keyboard -----------------------------------------------------------
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement
       const typing = target.closest('input, textarea, select, [contenteditable="true"]')
       if (event.key === 'Escape') {
-        // Something deeper (a popover, an input's own Escape) already used it.
-        // (The delete confirmation handles its own Escape: see DeleteConfirm.)
+        // (The delete confirmation and pickers handle their own Escape.)
         if (event.defaultPrevented) return
-        // Our Escape, never the host's (which would close the pane): close the
-        // innermost thing that is open. preventDefault is what tells the host
-        // to stay out — see keys.ts for why this listener sits on `document`.
+        // Our Escape, never the host's (which closes the pane): close the
+        // innermost thing that is open. See keys.ts for why this is on document.
         if (help) { event.preventDefault(); setHelp(false); return }
         if (openId) { event.preventDefault(); setOpenId(null); return }
-        if (searching || view.kind === 'search') { event.preventDefault(); closeSearch(); return }
+        if (searching || viewRef.current.kind === 'search') { event.preventDefault(); closeSearch(); return }
         if (overlaySidebar) { event.preventDefault(); setOverlaySidebar(false); return }
         return
       }
       if (typing || event.metaKey || event.ctrlKey || event.altKey) return
-      // The confirmation owns the keyboard while it is open (its Delete button
-      // is focused, so Enter confirms natively).
       if (deleting) return
-      const index = flat.findIndex(t => t.id === focusId)
-      const focused = index >= 0 ? flat[index] : null
+      const list = flatRef.current
+      const index = list.findIndex(t => t.id === focusId)
+      const focused = index >= 0 ? list[index] : null
       const move = (delta: number) => {
-        if (!flat.length) return
-        const next = flat[Math.max(0, Math.min(flat.length - 1, (index < 0 ? (delta > 0 ? -1 : flat.length) : index) + delta))]
+        if (!list.length) return
+        const next = list[Math.max(0, Math.min(list.length - 1, (index < 0 ? (delta > 0 ? -1 : list.length) : index) + delta))]
         setFocusId(next.id)
         listRef.current?.querySelector(`[data-task-id="${CSS.escape(next.id)}"]`)?.scrollIntoView({ block: 'nearest' })
         if (openId) setOpenId(next.id)
       }
       const key = event.key
-      // Enter and Space belong to a focused button or link (Refresh, Undo,
-      // Delete…). Taking them for the focused TASK cancelled those buttons'
-      // clicks (review of PR #2, reproduced in Chromium).
+      // Enter and Space belong to a focused button or link.
       if ((key === 'Enter' || key === ' ') && isActivatable(target)) return
       if (key === 'j' || key === 'ArrowDown') { event.preventDefault(); move(1) }
       else if (key === 'k' || key === 'ArrowUp') { event.preventDefault(); move(-1) }
       else if ((key === 'Enter' || key === 'o') && focused) { event.preventDefault(); setOpenId(focused.id) }
-      else if ((key === 'x' || key === ' ') && focused) { event.preventDefault(); void toggle(focused) }
-      else if (/^[1-4]$/.test(key) && focused) { event.preventDefault(); void patch(focused, { priority: (5 - Number(key)) as ApiPriority }) }
-      else if (key === 't' && focused) { event.preventDefault(); void patch(focused, { due: 'today' }) }
-      else if ((key === 'Backspace' || key === 'Delete') && !user?.readOnly && !target.closest('.td-popover, [role="dialog"]')) {
-        // The task the user is looking at: the drawer's, when it is open — a
-        // child opened from its parent's drawer is NOT the list's focused row,
-        // and ⌫ there deleted the parent (and with it the child) in review.
+      else if ((key === 'x' || key === ' ') && focused) { event.preventDefault(); actions.complete(focused) }
+      else if (/^[1-4]$/.test(key) && focused) { event.preventDefault(); void actions.update(focused, { priority: (5 - Number(key)) as ApiPriority }).catch(() => {}) }
+      else if (key === 't' && focused) { event.preventDefault(); void actions.update(focused, { due: 'today' }).catch(() => {}) }
+      else if ((key === 'Backspace' || key === 'Delete') && !user?.readOnly && !target.closest('.td-popover, [role="dialog"]:not(.td-task-modal)')) {
+        // The task the user is looking at: the open one, else the focused row.
         const id = openId ?? focused?.id
-        if (id) { event.preventDefault(); requestDelete(id, flat.find(t => t.id === id)) }
+        if (id) { event.preventDefault(); requestDelete(id, s.task(id)) }
       }
-      else if (key === 'q' || key === 'a') { event.preventDefault(); quickAdd.current?.focus() }
+      else if ((key === 'q' || key === 'a') && !user?.readOnly) { event.preventDefault(); addTask.current?.open() }
       else if (key === '/') { event.preventDefault(); setSearching(true); requestAnimationFrame(() => searchInput.current?.focus()) }
-      else if (key === 'r') { event.preventDefault(); void load(view, 'refresh'); void bridge.call('meta', {}).then(setMeta, () => {}) }
+      else if (key === 'r') { event.preventDefault(); refreshAll() }
       else if (key === '[') { event.preventDefault(); if (narrow) setOverlaySidebar(v => !v); else setSidebarPref(!sidebarPref) }
       else if (key === '?') { event.preventDefault(); setHelp(v => !v) }
-      else if (key === 'g') { /* reserved for g-chords */ }
     }
     return onKeyAfterReact(onKey)
-  }, [flat, focusId, openId, searching, overlaySidebar, help, toggle, patch, load, view, bridge, narrow, sidebarPref, setSidebarPref, closeSearch, deleting, user?.readOnly, requestDelete])
+  }, [focusId, openId, searching, overlaySidebar, help, actions, narrow, sidebarPref, setSidebarPref, closeSearch, deleting, user?.readOnly, requestDelete, refreshAll, s])
 
-  // ---- render -----------------------------------------------------------
+  // ---- render -------------------------------------------------------------
   const title = viewTitle(view, meta)
-  const openCount = flat.filter(t => !t.completedAt && !completing.has(t.id)).length
-  const quickAddContext = view.kind === 'today' ? 'Due today unless you type a date'
-    : view.kind === 'project' && currentProject ? `Adds to #${currentProject.name}`
-    : view.kind === 'label' ? `Tagged @${view.query}`
-    : view.kind === 'inbox' ? 'Adds to Inbox' : null
+  const openCount = flat.filter(t => !t.completedAt && !s.phase(t.id)).length
   const canAdd = !user?.readOnly && view.kind !== 'completed'
+  const addHint = view.kind === 'today' ? 'Due today unless you type a date'
+    : view.kind === 'label' ? `Tagged @${view.query}` : null
+  const ready = state?.status === 'ready'
+  const projectView = (view.kind === 'project' || view.kind === 'inbox') && !!currentProjectId
 
   return (
     <div className={rootClass(variant, narrow ? ' is-narrow' : '')}>
@@ -474,6 +326,7 @@ function Workspace({ variant, revision, defaultView, now, user }: { variant: App
               counts={counts}
               user={user}
               onSelect={selectView}
+              onAddTask={canAdd ? () => { setOverlaySidebar(false); addTask.current?.open() } : undefined}
               onSearch={() => { setSearching(true); setOverlaySidebar(false); requestAnimationFrame(() => searchInput.current?.focus()) }}
               onCreateProject={async (name, color) => {
                 try {
@@ -513,81 +366,72 @@ function Workspace({ variant, revision, defaultView, now, user }: { variant: App
                 {view.kind === 'project' && currentProject && <span className="td-dot lg" style={{ background: colorHex(currentProject.color) }} />}
                 {view.kind === 'inbox' && <InboxIcon />}
                 <h1>{title}</h1>
-                {!loading && view.kind !== 'completed' && <span className="td-title-count">{openCount}{cursor ? '+' : ''}</span>}
+                {ready && view.kind !== 'completed' && <span className="td-title-count">{openCount}{state?.cursor ? '+' : ''}</span>}
               </div>
             )}
             <div className="td-header-tools">
-              {currentProject && <button className="td-icon-btn" title="Open project in Todoist" onClick={() => openUrl(currentProject.url)}><ExternalIcon /></button>}
+              {currentProject && !currentProject.isInbox && <button className="td-icon-btn" title="Open project in Todoist" onClick={() => openUrl(currentProject.url)}><ExternalIcon /></button>}
               <button className="td-icon-btn" title="Keyboard shortcuts (?)" onClick={() => setHelp(true)}><KeyboardIcon /></button>
-              <button className={`td-icon-btn${loading ? ' is-spinning' : ''}`} title="Refresh (r)" onClick={() => { void load(view, 'refresh'); void bridge.call('meta', {}).then(setMeta, () => {}) }}>
-                <RefreshIcon />
-              </button>
+              <button className="td-icon-btn" title="Refresh (r)" onClick={refreshAll}><RefreshIcon /></button>
               {variant === 'modal' && (
                 <button className="td-icon-btn" title="Close (Esc)" onClick={() => void bridge.context.api.ui.close()}><CloseIcon /></button>
               )}
             </div>
           </header>
 
-          {canAdd && (
-            <div className="td-add-row">
-              <QuickAddBar
-                ref={quickAdd}
-                placeholder={narrow ? 'Add a task' : 'Add a task — "Review PR tomorrow 3pm p1 #Work @review"'}
-                contextLabel={quickAddContext}
-                onSubmit={submitQuickAdd}
-              />
-            </div>
-          )}
-
           <div className="td-list" ref={listRef} role="list">
-            {loading && !tasks.length ? (
-              <ListSkeleton />
-            ) : listError && !tasks.length ? (
-              <div className="td-empty">
-                <p>Couldn’t load this list.</p>
-                <p className="td-dim td-small">{listError}</p>
-                <button className="td-btn" onClick={() => void load(view, 'reset')}>Try again</button>
-              </div>
-            ) : !flat.length ? (
-              <EmptyState view={view} />
+            {!ready && !rows.length ? (
+              state?.status === 'error' ? (
+                <div className="td-empty">
+                  <p>Couldn’t load this list.</p>
+                  <p className="td-dim td-small">{state.error}</p>
+                  <button className="td-btn" onClick={() => quietly(view)}>Try again</button>
+                </div>
+              ) : showSkeleton ? <ListSkeleton /> : null
             ) : (
-              groups.map(group => (
-                <section key={group.key} className="td-group">
-                  {(groups.length > 1 || group.subtitle || group.key !== 'all') && group.title && (
-                    <h2 className={`td-group-title${group.tone ? ` tone-${group.tone}` : ''}`}>
-                      {group.title}
-                      {group.subtitle && <span className="td-group-sub">{group.subtitle}</span>}
-                      <span className="td-group-count">{group.tasks.length}</span>
-                    </h2>
-                  )}
-                  {group.tasks.map(task => (
-                    <TaskItem
-                      key={task.id}
-                      task={task}
-                      lookup={lookup}
-                      now={now}
-                      showProject={view.kind !== 'project' && view.kind !== 'inbox'}
-                      focused={focusId === task.id || openId === task.id}
-                      completing={completing.has(task.id)}
-                      depth={depths.get(task.id) ?? 0}
-                      childCount={childCounts.get(task.id) ?? 0}
-                      onToggle={toggle}
-                      onOpen={t => { setFocusId(t.id); setOpenId(t.id) }}
-                      onPatch={patch}
-                      onFocus={t => setFocusId(t.id)}
-                      onOpenUrl={openUrl}
-                      onDelete={user?.readOnly ? undefined : t => { setFocusId(t.id); requestDelete(t.id, t) }}
-                    />
-                  ))}
-                </section>
-              ))
+              <>
+                {!flat.length && <EmptyState view={view} />}
+                {groups.map(group => (
+                  <section key={group.key} className="td-group">
+                    {(groups.length > 1 || group.subtitle || group.key !== 'all') && group.title && (
+                      <h2 className={`td-group-title${group.tone ? ` tone-${group.tone}` : ''}`}>
+                        {group.title}
+                        {group.subtitle && <span className="td-group-sub">{group.subtitle}</span>}
+                        <span className="td-group-count">{group.tasks.filter(t => !s.phase(t.id)).length}</span>
+                      </h2>
+                    )}
+                    {group.tasks.map(task => (
+                      <TaskItem
+                        key={task.id}
+                        task={task}
+                        lookup={lookup}
+                        now={now}
+                        showProject={view.kind !== 'project' && view.kind !== 'inbox'}
+                        focused={focusId === task.id || openId === task.id}
+                        phase={s.phase(task.id)}
+                        pending={s.isPending(task.id)}
+                        depth={depths.get(task.id) ?? 0}
+                        childCount={childCounts.get(task.id) ?? 0}
+                        actions={rowActions}
+                      />
+                    ))}
+                    {projectView && canAdd && group.key !== 'all' && (
+                      <AddTask meta={meta} base={intentHere(group.key)} onSubmit={submitAdd} onLabelCreate={createLabel} />
+                    )}
+                  </section>
+                ))}
+              </>
             )}
 
-            {(cursor || truncated) && flat.length > 0 && (
+            {canAdd && (ready || rows.length > 0) && (
+              <AddTask ref={addTask} meta={meta} base={intentHere(null)} hint={addHint} onSubmit={submitAdd} onLabelCreate={createLabel} />
+            )}
+
+            {(state?.cursor || state?.truncated) && flat.length > 0 && (
               <div className="td-more">
-                {cursor ? (
-                  <button className="td-btn" disabled={loadingMore} onClick={() => void load(view, 'append', cursor)}>
-                    {loadingMore ? <span className="td-spinner" /> : null} Load more
+                {state.cursor ? (
+                  <button className="td-btn" disabled={state.refreshing} onClick={() => void loadMore(view).catch(fail)}>
+                    Load more
                   </button>
                 ) : (
                   <span className="td-dim td-small">Showing the first {flat.length} tasks — this filter has more than can be loaded here. Open it in Todoist for the rest.</span>
@@ -595,17 +439,21 @@ function Workspace({ variant, revision, defaultView, now, user }: { variant: App
               </div>
             )}
 
-            {view.kind === 'project' && currentProject && !user?.readOnly && !loading && (
+            {view.kind === 'project' && currentProject && !user?.readOnly && ready && (
               addingSection !== null ? (
                 <form
                   className="td-section-add"
                   onSubmit={async e => {
                     e.preventDefault()
-                    if (!addingSection.trim()) return
+                    const name = addingSection.trim()
+                    // One submit at a time: a double click created two
+                    // identical sections (review).
+                    if (!name || sectionSubmitting.current) return
+                    sectionSubmitting.current = true
                     try {
-                      await bridge.call('createSection', { projectId: currentProject.id, name: addingSection.trim() })
+                      await bridge.call('createSection', { projectId: currentProject.id, name })
                       setAddingSection(null)
-                    } catch (error) { fail(error) }
+                    } catch (error) { fail(error) } finally { sectionSubmitting.current = false }
                   }}
                 >
                   <input autoFocus value={addingSection} onChange={e => setAddingSection(e.target.value)} placeholder="Section name" onKeyDown={e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setAddingSection(null) } }} />
@@ -618,222 +466,40 @@ function Workspace({ variant, revision, defaultView, now, user }: { variant: App
             )}
           </div>
         </main>
-
-        {openId && meta && (
-          <>
-            {drawerOverlays && <div className="td-scrim" onClick={() => setOpenId(null)} />}
-            <TaskDetailPanel
-              key={openId}
-              taskId={openId}
-              meta={meta}
-              now={now}
-              onClose={() => setOpenId(null)}
-              onToggle={toggle}
-              onOpenTask={id => setOpenId(id)}
-              revision={revision}
-              onError={message => toast(message, { tone: 'error' })}
-              onOpenUrl={openUrl}
-              onCreateLabel={createLabel}
-              onNeedSections={ensureSections}
-            />
-          </>
-        )}
       </div>
 
-      <div className="td-toasts" aria-live="polite">
-        {toasts.map(t => (
-          <div key={t.id} className={`td-toast${t.tone === 'error' ? ' is-error' : ''}`}>
-            <span>{t.message}</span>
-            {t.action && <button onClick={() => { t.action!.run(); setToasts(list => list.filter(x => x.id !== t.id)) }}>{t.action.label}</button>}
-          </div>
-        ))}
-      </div>
+      {openId && meta && (
+        <TaskDetailPanel
+          taskId={openId}
+          meta={meta}
+          now={now}
+          actions={actions}
+          readOnly={!!user?.readOnly}
+          onClose={() => setOpenId(null)}
+          onOpenTask={id => setOpenId(id)}
+          onDelete={task => requestDelete(task.id, task)}
+          onError={message => toast(message, { tone: 'error' })}
+          onOpenUrl={openUrl}
+          onCreateLabel={createLabel}
+          onNeedSections={ensureSections}
+        />
+      )}
+
+      <Toasts toasts={toasts} onDismiss={dismiss} />
 
       {help && <ShortcutHelp onClose={() => setHelp(false)} />}
-      {deleting && <DeleteConfirm target={deleting} onCancel={() => setDeleting(null)} onConfirm={() => void confirmDelete(deleting)} />}
-    </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
-
-function viewTitle(view: ListQuery, meta: Meta | null): string {
-  switch (view.kind) {
-    case 'today': return 'Today'
-    case 'upcoming': return 'Upcoming'
-    case 'inbox': return 'Inbox'
-    case 'completed': return 'Completed'
-    case 'search': return `Search: ${view.query ?? ''}`
-    case 'label': return `@${view.query ?? ''}`
-    case 'filter': return meta?.filters.find(f => f.id === view.id)?.name ?? 'Filter'
-    case 'project': return meta?.projects.find(p => p.id === view.id)?.name ?? 'Project'
-  }
-}
-
-/** Groups for the current view plus subtask depth (project views nest
- *  subtasks under their parent like Todoist; date views stay flat because a
- *  subtask can be due on a different day than its parent). */
-function buildGroups(view: ListQuery, tasks: TaskRow[], now: Date, meta: Meta | null, projectId: string | undefined): { groups: TaskGroup[]; depths: Map<string, number>; childCounts: Map<string, number> } {
-  const depths = new Map<string, number>()
-  const childCounts = new Map<string, number>()
-  const ids = new Set(tasks.map(t => t.id))
-  for (const task of tasks) if (task.parentId && ids.has(task.parentId)) childCounts.set(task.parentId, (childCounts.get(task.parentId) ?? 0) + 1)
-
-  if (view.kind === 'today') return { groups: groupToday(tasks, now), depths, childCounts }
-  if (view.kind === 'upcoming') return { groups: groupByDay(tasks, now), depths, childCounts }
-  if (view.kind === 'completed') return { groups: groupCompleted(tasks, now), depths, childCounts }
-
-  if ((view.kind === 'project' || view.kind === 'inbox') && projectId) {
-    const sections = (meta?.sections ?? []).filter(s => s.projectId === projectId)
-    const bySection = new Map<string | null, TaskRow[]>()
-    for (const task of tasks) {
-      const key = task.sectionId && sections.some(s => s.id === task.sectionId) ? task.sectionId : null
-      const list = bySection.get(key) ?? []
-      list.push(task)
-      bySection.set(key, list)
-    }
-    const nest = (list: TaskRow[]): TaskRow[] => {
-      const inList = new Set(list.map(t => t.id))
-      const roots = list.filter(t => !t.parentId || !inList.has(t.parentId)).sort((a, b) => a.order - b.order)
-      const out: TaskRow[] = []
-      const walk = (task: TaskRow, depth: number) => {
-        out.push(task)
-        depths.set(task.id, depth)
-        list.filter(c => c.parentId === task.id).sort((a, b) => a.order - b.order).forEach(c => walk(c, Math.min(depth + 1, 4)))
-      }
-      roots.forEach(r => walk(r, 0))
-      return out
-    }
-    const groups: TaskGroup[] = []
-    const unsectioned = bySection.get(null) ?? []
-    if (unsectioned.length || !sections.length) groups.push({ key: 'all', title: '', tasks: nest(unsectioned) })
-    for (const section of sections) {
-      groups.push({ key: section.id, title: section.name, tasks: nest(bySection.get(section.id) ?? []) })
-    }
-    return { groups: groups.filter(g => g.tasks.length || g.key !== 'all'), depths, childCounts }
-  }
-
-  // label / filter / search: Todoist orders by priority, then date.
-  const sorted = [...tasks].sort((a, b) => b.priority - a.priority || (a.due?.date ?? '9999').localeCompare(b.due?.date ?? '9999') || a.order - b.order)
-  return { groups: [{ key: 'all', title: '', tasks: sorted }], depths, childCounts }
-}
-
-function EmptyState({ view }: { view: ListQuery }) {
-  const copy: Record<string, [string, string]> = {
-    today: ['You’re all done for today', 'Enjoy the rest of your day — or add something below.'],
-    upcoming: ['Nothing scheduled in the next two weeks', 'Tasks with a due date show up here.'],
-    inbox: ['Inbox zero', 'New tasks without a project land here.'],
-    completed: ['No completed tasks yet', 'Tasks you complete show up here.'],
-    search: ['No matching tasks', 'Search looks at task names.'],
-  }
-  const [title, body] = copy[view.kind] ?? ['No tasks here', 'Add one with the bar above.']
-  return (
-    <div className="td-empty">
-      <svg width="96" height="72" viewBox="0 0 96 72" aria-hidden="true" className="td-empty-art">
-        <rect x="14" y="10" width="68" height="52" rx="10" fill="var(--td-surface-hi)" />
-        <circle cx="32" cy="30" r="6" fill="none" stroke="var(--td-accent)" strokeWidth="2.5" />
-        <path d="m29.4 30.2 2 2 3.6-3.8" fill="none" stroke="var(--td-accent)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-        <rect x="44" y="27" width="26" height="5" rx="2.5" fill="var(--td-border-hi)" />
-        <rect x="26" y="44" width="44" height="5" rx="2.5" fill="var(--td-border)" />
-      </svg>
-      <p className="td-empty-title">{title}</p>
-      <p className="td-dim">{body}</p>
-    </div>
-  )
-}
-
-function ListSkeleton() {
-  return (
-    <div className="td-skeleton-list" aria-busy="true">
-      {[78, 52, 64, 40, 70].map((w, i) => (
-        <div key={i} className="td-task is-skeleton">
-          <span className="td-checkbox" />
-          <div className="td-task-main"><span className="td-skel" style={{ width: `${w}%` }} /><span className="td-skel sm" style={{ width: `${w / 2}%` }} /></div>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-type Deleting = { id: string; task: TaskRow | null; subtasks: number | null }
-
-/**
- * The delete confirmation. It owns the keyboard while open:
- * - Escape: its own `document` CAPTURE listener, registered after any open
- *   picker's, so one Escape closes a picker left open underneath AND cancels
- *   (the picker stops propagation, not immediate propagation). In the bubble
- *   phase it never ran when a picker was open, leaving Delete armed (review).
- * - Tab cycles between its two buttons instead of escaping to the sidebar.
- * - Focus returns to where it was when the dialog closes.
- */
-function DeleteConfirm({ target, onCancel, onConfirm }: { target: Deleting; onCancel: () => void; onConfirm: () => void }) {
-  const dialog = useRef<HTMLDivElement>(null)
-  // Mount-once effect reading the latest callback: re-running it on each
-  // render (the sub-task count arrives a moment later) would restore focus to
-  // the background and disarm the focused Delete button.
-  const cancel = useRef(onCancel)
-  cancel.current = onCancel
-  // Captured during the FIRST render, before the Delete button's autoFocus
-  // runs in the commit; read in an effect it was already the Delete button,
-  // so focus "returned" to a removed element and was lost.
-  const [previous] = useState(() => document.activeElement as HTMLElement | null)
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        event.stopPropagation()
-        cancel.current()
-      } else if (event.key === 'Tab') {
-        const buttons = [...(dialog.current?.querySelectorAll<HTMLButtonElement>('button') ?? [])]
-        if (!buttons.length) return
-        event.preventDefault()
-        const at = buttons.indexOf(document.activeElement as HTMLButtonElement)
-        buttons[(at + (event.shiftKey ? -1 : 1) + buttons.length) % buttons.length].focus()
-      }
-    }
-    document.addEventListener('keydown', onKey, true)
-    return () => {
-      document.removeEventListener('keydown', onKey, true)
-      if (previous?.isConnected) previous.focus()
-    }
-  }, [])
-  const { task, subtasks } = target
-  const scope = subtasks === null ? ' and any sub-tasks' : subtasks > 0 ? ` and its ${subtasks} sub-task${subtasks > 1 ? 's' : ''} (with anything nested under them)` : ''
-  return (
-    <div className="td-modal-scrim" onClick={onCancel}>
-      <div ref={dialog} className="td-help td-delete" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Delete task">
-        <div className="td-help-head"><h2>Delete task?</h2></div>
-        <p>{task ? `“${task.content}”` : 'This task'}{scope} will be deleted. This cannot be undone.</p>
-        <div className="td-delete-actions">
-          <button className="td-btn" onClick={onCancel}>Cancel</button>
-          <button className="td-btn td-btn-danger" autoFocus onClick={onConfirm}><TrashIcon size={13} /> Delete</button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function ShortcutHelp({ onClose }: { onClose: () => void }) {
-  const rows: Array<[string, string]> = [
-    ['q / a', 'Quick add'],
-    ['/', 'Search'],
-    ['j / k  ↓ / ↑', 'Move between tasks'],
-    ['Enter / o', 'Open task'],
-    ['x / Space', 'Complete / reopen'],
-    ['1 – 4', 'Set priority'],
-    ['t', 'Schedule for today'],
-    ['⌫ / Delete', 'Delete task (asks first)'],
-    ['r', 'Refresh'],
-    ['[', 'Toggle sidebar'],
-    ['Esc', 'Close help / drawer / search'],
-    ['⌘⌥T', 'Quick Add from anywhere in Agent Code'],
-  ]
-  return (
-    <div className="td-modal-scrim" onClick={onClose}>
-      <div className="td-help" onClick={e => e.stopPropagation()} role="dialog" aria-label="Keyboard shortcuts">
-        <div className="td-help-head"><h2>Keyboard shortcuts</h2><button className="td-icon-btn" onClick={onClose}><CloseIcon /></button></div>
-        <dl>{rows.map(([k, v]) => <div key={k}><dt>{k.split('  ').map(part => <kbd key={part}>{part}</kbd>)}</dt><dd>{v}</dd></div>)}</dl>
-      </div>
+      {deleting && (
+        <DeleteConfirm
+          target={deleting}
+          onCancel={() => setDeleting(null)}
+          onConfirm={() => {
+            const target = deleting
+            setDeleting(null)
+            setOpenId(current => (current === target.id ? null : current))
+            actions.remove(target.id, target.task?.content ?? 'task')
+          }}
+        />
+      )}
     </div>
   )
 }

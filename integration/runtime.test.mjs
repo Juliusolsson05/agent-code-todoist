@@ -54,17 +54,19 @@ test('the first status starts the service once and moves every view to ready', a
   }
 })
 
-test('a mutation from one view bumps the revision every view refetches on', async () => {
+test('a mutation from one view reaches every view as a change; reads publish nothing', async () => {
   const state = await activate()
   try {
     await state.request('status', {})
-    const before = state.last('todoist.main').revision
+    const before = state.last('todoist.main')
     await state.request('quickAdd', { text: 'From the modal p2' })
-    assert.equal(state.last('todoist.main').revision, before + 1)
-    assert.equal(state.last('todoist.quickAdd').revision, before + 1)
-    const before2 = before + 1
+    for (const view of ['todoist.main', 'todoist.quickAdd', 'todoist.window']) {
+      assert.equal(state.last(view).changeSeq, before.changeSeq + 1)
+      assert.equal(state.last(view).changes.at(-1).kind, 'upsert')
+    }
+    const published = state.published.length
     await state.request('list', { kind: 'today' })
-    assert.equal(state.last('todoist.main').revision, before2, 'reads never bump')
+    assert.equal(state.published.length, published, 'reads never publish')
   } finally {
     await dispose(state)
   }
@@ -74,11 +76,16 @@ test('after the host kills the service, a read restarts it and retries once', as
   const state = await activate()
   try {
     await state.request('status', {})
+    // Let the ready-time prefetch (meta + three lists) finish first.
+    for (let i = 0; i < 50 && state.invokes.filter(n => n === 'list').length < 3; i++) await new Promise(r => setTimeout(r, 20))
+    await new Promise(r => setTimeout(r, 200))
+    const starts = state.starts
+    const lists = state.invokes.filter(n => n === 'list').length
     state.failNext = { name: 'list', error: new Error('Service process exited (code 1).') }
     const page = await state.request('list', { kind: 'today' })
     assert.ok(page.tasks.length > 0)
-    assert.equal(state.starts, 2, 'restarted')
-    assert.deepEqual(state.invokes.filter(n => n === 'list').length, 2)
+    assert.equal(state.starts - starts, 1, 'restarted once')
+    assert.equal(state.invokes.filter(n => n === 'list').length - lists, 2, 'and retried once')
   } finally {
     await dispose(state)
   }
@@ -334,6 +341,61 @@ test('a large reply crosses runtime and bridge in parts and arrives whole', asyn
     const page = await collect(first, (id, index) => state.request('chunk', { id, index }))
     assert.equal(page.tasks.length, 400)
     assert.ok(parts.length >= 1)
+  } finally {
+    await dispose(state)
+  }
+})
+
+// ---- the change feed (plan "Rebuild for feel") ---------------------------
+
+test('a completion publishes one typed change to every view and refetches nothing', async () => {
+  const state = await activate()
+  try {
+    await state.request('status', {})
+    const before = state.last('todoist.main')
+    const id = s.t.nextWeek.id
+    state.invokes.length = 0
+    await state.request('complete', { id })
+    assert.deepEqual(state.invokes, ['complete'], 'no list, meta or section reloads behind it')
+    for (const view of ['todoist.main', 'todoist.quickAdd', 'todoist.window']) {
+      const published = state.last(view)
+      assert.equal(published.revision, before.revision, 'not a "reload everything" signal')
+      assert.equal(published.changeSeq, before.changeSeq + 1)
+      assert.deepEqual(published.changes.at(-1), { kind: 'remove', id, reason: 'completed', task: published.changes.at(-1).task, seq: before.changeSeq + 1 })
+      assert.ok(published.changes.at(-1).task.completedAt, 'carries the completed row for the Completed list')
+    }
+    await state.request('uncomplete', { id })
+    assert.equal(state.last('todoist.main').changes.at(-1).kind, 'upsert')
+  } finally {
+    await dispose(state)
+  }
+})
+
+test('the runtime answers a list from memory at once and keeps it current with the feed', async () => {
+  const state = await activate()
+  try {
+    await state.request('status', {})
+    await state.request('list', { kind: 'today' })
+    const cached = await state.request('list', { kind: 'today', cached: true })
+    assert.ok(cached.tasks.some(t => t.id === s.t.today.id))
+    await state.request('update', { id: s.t.today.id, due: 'tomorrow' })
+    const after = await state.request('list', { kind: 'today', cached: true })
+    assert.ok(!after.tasks.some(t => t.id === s.t.today.id), 'moved out of Today in the cache too')
+    await state.request('update', { id: s.t.today.id, due: 'today' })
+  } finally {
+    await dispose(state)
+  }
+})
+
+test('creating a project bumps metaRevision only', async () => {
+  const state = await activate()
+  try {
+    await state.request('status', {})
+    const before = state.last('todoist.main')
+    await state.request('createProject', { name: 'Feed project' })
+    const after = state.last('todoist.main')
+    assert.equal(after.metaRevision, before.metaRevision + 1)
+    assert.equal(after.revision, before.revision)
   } finally {
     await dispose(state)
   }
