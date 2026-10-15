@@ -6,7 +6,7 @@ import { collect, countJsonValues, fitsBridge, HOST_MAX_CHARS, HOST_MAX_VALUES, 
 import { isAgentSession } from '../src/shared/agents.ts'
 import { planFollowUps } from '../src/shared/quickAddPlan.ts'
 import { chunk, encodeReply } from '../server/invoke.ts'
-import { filterPage } from '../server/handlers.ts'
+import { durationMinutes, splitFilterQueries } from '../server/handlers.ts'
 import { isExtensionJson } from './support/bridge.mjs'
 import { dueTone, formatDue, groupByDay, groupToday, parseLocalDate } from '../src/shared/dates.ts'
 import { contentPreview, tokenize } from '../src/shared/quickAddTokens.ts'
@@ -170,23 +170,19 @@ test('label view and pickers: only what the parser did not apply becomes an upda
 
 // ---- saved filters ---------------------------------------------------------
 
-test('a multi-query saved filter is complete only when no section has more', () => {
-  const t = id => ({ ...sdk.task(), id })
-  // Shape: td 5.4.10 `filter view --json` for "p1, p2" (formatFilterSectionsJson).
-  const complete = filterPage({ sections: [{ query: 'p1', results: [t('a'), t('b')], nextCursor: null }, { query: 'p2', results: [t('b'), t('c')], nextCursor: null }] })
-  assert.deepEqual(complete.tasks.map(x => x.id), ['a', 'b', 'c'])
-  assert.equal(complete.truncated, false)
-  const more = filterPage({ sections: [{ query: 'p1', results: [t('a')], nextCursor: 'c1' }, { query: 'p2', results: [], nextCursor: null }] })
-  assert.equal(more.truncated, true, 'td cannot continue a multi-section filter, so say it is partial')
-  assert.equal(more.nextCursor, null)
+test('a saved filter splits into sections on top-level commas only', () => {
+  // Todoist shows each comma-separated query of a filter as its own section.
+  assert.deepEqual(splitFilterQueries('p1, p2'), ['p1', 'p2'])
+  assert.deepEqual(splitFilterQueries('(today, overdue) & #Work, @waiting'), ['(today, overdue) & #Work', '@waiting'])
+  assert.deepEqual(splitFilterQueries('today'), ['today'])
 })
 
-test('a one-query filter keeps td’s cursor; a full page without one may have more', () => {
-  const t = id => ({ ...sdk.task(), id })
-  assert.deepEqual(filterPage({ results: [t('a')], nextCursor: 'c1' }).nextCursor, 'c1')
-  const sorted = filterPage({ results: Array.from({ length: 1000 }, (_, i) => t(`t${i}`)), nextCursor: null })
-  assert.equal(sorted.truncated, true, 'td slices a sorted filter to the limit and drops the cursor')
-  assert.equal(filterPage({ results: [t('a')], nextCursor: null }).truncated, false)
+test('durations from the pickers become minutes for the API', () => {
+  assert.equal(durationMinutes('45m'), 45)
+  assert.equal(durationMinutes('1h30m'), 90)
+  assert.equal(durationMinutes('2h'), 120)
+  assert.equal(durationMinutes('soon'), null)
+  assert.equal(durationMinutes(''), null)
 })
 
 test('agent sessions for "Link to agent": a kind-less session is an agent', () => {

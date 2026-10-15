@@ -247,7 +247,7 @@ is the recorded file `tests/fixtures/td-5.4.10-signed-out-today.stderr`.
     - `integration/large` — a 300-project/200-label account, a task with 50 × 4,000-char comments, a 130-task
       list with 20 labels each, a multi-query saved filter — all through `tests/support/viaBridge.mjs`.
     - `integration/golden` — a saved transcript of 21 operations' requests and rows
-      (`tests/fixtures/golden/td-5.4.10.json`, days normalised, `UPDATE_GOLDEN=1` re-records and refuses
+      (`tests/fixtures/golden/service-api-v1.json`, days normalised, `UPDATE_GOLDEN=1` re-records and refuses
       failures).
   - Files run one at a time, because parallel `td` processes on a loaded machine hit the 20 s deadline.
 - **UI (`npm run test:ui`, added from review):** `uitests/ui.test.mjs` mounts the real view modules in Chromium

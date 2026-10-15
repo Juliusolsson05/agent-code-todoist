@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, test } from 'node:test'
 
-import { meta, status } from '../server/handlers.ts'
+import { accountUser, status } from '../server/handlers.ts'
 
 // Own file = own service module state (node --test runs each file in its own
 // process). Two td installs signed into different accounts: A answers
@@ -42,5 +42,5 @@ test('a late status answer from the previous td does not replace the new account
   const fresh = await status({ tdPath: b })
   assert.equal(fresh.user.id, 'B')
   await slow
-  assert.equal((await meta()).user?.id, 'B', 'meta reports the account td B is signed into')
+  assert.equal(accountUser()?.id, 'B', 'the service keeps the account td B is signed into')
 })

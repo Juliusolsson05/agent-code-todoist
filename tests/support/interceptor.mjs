@@ -14,7 +14,7 @@
 // valid Todoist token, and `connects` counts tunnels so a test can assert td
 // really came through us.
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import http from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -23,7 +23,15 @@ import tls from 'node:tls'
 export async function startInterceptor(apiServer) {
   const dir = mkdtempSync(join(tmpdir(), 'todoist-intercept-'))
   const openssl = (...args) => execFileSync('openssl', args, { cwd: dir, stdio: 'pipe' })
-  openssl('req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', 'ca.key', '-out', 'ca.pem', '-days', '2', '-subj', '/CN=agent-code-todoist test CA')
+  // The runner's CA (dev/test.mjs) when present: this process already trusts
+  // it through NODE_EXTRA_CA_CERTS, which the in-process SDK client needs.
+  const shared = process.env.TODOIST_TEST_CA_DIR
+  if (shared) {
+    copyFileSync(join(shared, 'ca.key'), join(dir, 'ca.key'))
+    copyFileSync(join(shared, 'ca.pem'), join(dir, 'ca.pem'))
+  } else {
+    openssl('req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', 'ca.key', '-out', 'ca.pem', '-days', '2', '-subj', '/CN=agent-code-todoist test CA')
+  }
   openssl('req', '-newkey', 'rsa:2048', '-nodes', '-keyout', 'leaf.key', '-out', 'leaf.csr', '-subj', '/CN=api.todoist.com')
   writeFileSync(join(dir, 'san.cnf'), 'subjectAltName=DNS:api.todoist.com,DNS:todoist.com,DNS:app.todoist.com\n')
   openssl('x509', '-req', '-in', 'leaf.csr', '-CA', 'ca.pem', '-CAkey', 'ca.key', '-CAcreateserial', '-out', 'leaf.pem', '-days', '2', '-extfile', 'san.cnf')

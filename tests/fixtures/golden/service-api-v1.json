@@ -17,14 +17,6 @@
         },
         {
           "method": "GET",
-          "path": "/api/v1/labels/shared",
-          "query": {
-            "omit_personal": "true",
-            "limit": "200"
-          }
-        },
-        {
-          "method": "GET",
           "path": "/api/v1/projects",
           "query": {
             "limit": "200"
@@ -134,10 +126,6 @@
         "projectId": "p000002"
       },
       "api": [
-        {
-          "method": "GET",
-          "path": "/api/v1/projects/p000002"
-        },
         {
           "method": "GET",
           "path": "/api/v1/sections",
@@ -474,10 +462,6 @@
       "api": [
         {
           "method": "GET",
-          "path": "/api/v1/projects/p000002"
-        },
-        {
-          "method": "GET",
           "path": "/api/v1/tasks",
           "query": {
             "project_id": "p000002",
@@ -618,9 +602,9 @@
       "api": [
         {
           "method": "GET",
-          "path": "/api/v1/tasks/filter",
+          "path": "/api/v1/tasks",
           "query": {
-            "query": "@review",
+            "label": "review",
             "limit": "120"
           }
         }
@@ -670,41 +654,10 @@
       "api": [
         {
           "method": "GET",
-          "path": "/api/v1/projects",
-          "query": {
-            "limit": "200"
-          }
-        },
-        {
-          "method": "GET",
           "path": "/api/v1/tasks/filter",
           "query": {
             "query": "p1",
-            "limit": "200"
-          }
-        },
-        {
-          "method": "GET",
-          "path": "/api/v1/user"
-        },
-        {
-          "method": "POST",
-          "path": "/api/v1/sync",
-          "body": {
-            "resource_types": [
-              "filters"
-            ],
-            "sync_token": "*"
-          }
-        },
-        {
-          "method": "POST",
-          "path": "/api/v1/sync",
-          "body": {
-            "resource_types": [
-              "view_options"
-            ],
-            "sync_token": "*"
+            "limit": "120"
           }
         }
       ],
@@ -810,20 +763,8 @@
           "path": "/api/v1/tasks",
           "query": {
             "parent_id": "t00000b",
-            "limit": "25"
+            "limit": "200"
           }
-        },
-        {
-          "method": "GET",
-          "path": "/api/v1/tasks",
-          "query": {
-            "parent_id": "t00000k",
-            "limit": "1"
-          }
-        },
-        {
-          "method": "GET",
-          "path": "/api/v1/tasks/t00000b"
         },
         {
           "method": "GET",
@@ -934,7 +875,7 @@
           "labels": [
             "review"
           ],
-          "order": 0,
+          "order": 12,
           "commentCount": 0,
           "completedAt": null,
           "url": "https://app.todoist.com/app/task/golden-quick-add-t00000n"
@@ -958,25 +899,21 @@
       },
       "api": [
         {
-          "method": "GET",
-          "path": "/api/v1/projects/p000002"
-        },
-        {
           "method": "POST",
           "path": "/api/v1/tasks",
           "body": {
             "content": "Golden structured",
+            "description": "Body",
             "due_string": "tomorrow",
             "deadline_date": "<day+4>",
+            "duration": 45,
+            "duration_unit": "minute",
             "priority": 2,
-            "project_id": "p000002",
-            "section_id": "s000006",
             "labels": [
               "deep-work"
             ],
-            "description": "Body",
-            "duration": 45,
-            "duration_unit": "minute"
+            "project_id": "p000002",
+            "section_id": "s000006"
           }
         }
       ],
@@ -1003,7 +940,7 @@
           "labels": [
             "deep-work"
           ],
-          "order": 0,
+          "order": 13,
           "commentCount": 0,
           "completedAt": null,
           "url": "https://app.todoist.com/app/task/golden-structured-t00000o"
@@ -1021,10 +958,6 @@
         "deadline": ""
       },
       "api": [
-        {
-          "method": "GET",
-          "path": "/api/v1/tasks/t00000e"
-        },
         {
           "method": "POST",
           "path": "/api/v1/tasks/t00000e",
@@ -1050,7 +983,7 @@
           "sectionId": null,
           "parentId": null,
           "labels": [],
-          "order": 0,
+          "order": 5,
           "commentCount": 0,
           "completedAt": null,
           "url": "https://app.todoist.com/app/task/renamed-t00000e"
@@ -1065,14 +998,6 @@
       },
       "api": [
         {
-          "method": "GET",
-          "path": "/api/v1/projects/p000004"
-        },
-        {
-          "method": "GET",
-          "path": "/api/v1/tasks/t00000g"
-        },
-        {
           "method": "POST",
           "path": "/api/v1/tasks/t00000g/move",
           "body": {
@@ -1082,7 +1007,24 @@
       ],
       "result": {
         "ok": {
-          "ok": true
+          "ok": true,
+          "task": {
+            "id": "t00000g",
+            "content": "Call the bank",
+            "description": "",
+            "priority": 1,
+            "due": null,
+            "deadline": null,
+            "duration": null,
+            "projectId": "p000004",
+            "sectionId": null,
+            "parentId": null,
+            "labels": [],
+            "order": 7,
+            "commentCount": 0,
+            "completedAt": null,
+            "url": "https://app.todoist.com/app/task/call-the-bank-t00000g"
+          }
         }
       }
     },
@@ -1103,7 +1045,29 @@
       ],
       "result": {
         "ok": {
-          "ok": true
+          "ok": true,
+          "task": {
+            "id": "t00000d",
+            "content": "Prep demo",
+            "description": "",
+            "priority": 2,
+            "due": {
+              "date": "<day+1>",
+              "datetime": null,
+              "string": "tomorrow",
+              "recurring": false
+            },
+            "deadline": null,
+            "duration": null,
+            "projectId": "p000003",
+            "sectionId": null,
+            "parentId": null,
+            "labels": [],
+            "order": 4,
+            "commentCount": 0,
+            "completedAt": "<now>",
+            "url": "https://app.todoist.com/app/task/prep-demo-t00000d"
+          }
         }
       }
     },
@@ -1113,10 +1077,6 @@
         "kind": "completed"
       },
       "api": [
-        {
-          "method": "GET",
-          "path": "/api/v1/projects"
-        },
         {
           "method": "GET",
           "path": "/api/v1/tasks/completed/by_completion_date",
@@ -1175,7 +1135,29 @@
       ],
       "result": {
         "ok": {
-          "ok": true
+          "ok": true,
+          "task": {
+            "id": "t00000d",
+            "content": "Prep demo",
+            "description": "",
+            "priority": 2,
+            "due": {
+              "date": "<day+1>",
+              "datetime": null,
+              "string": "tomorrow",
+              "recurring": false
+            },
+            "deadline": null,
+            "duration": null,
+            "projectId": "p000003",
+            "sectionId": null,
+            "parentId": null,
+            "labels": [],
+            "order": 4,
+            "commentCount": 0,
+            "completedAt": null,
+            "url": "https://app.todoist.com/app/task/prep-demo-t00000d"
+          }
         }
       }
     },
@@ -1187,33 +1169,11 @@
       },
       "api": [
         {
-          "method": "GET",
-          "path": "/api/v1/comments",
-          "query": {
-            "task_id": "t00000d"
-          }
-        },
-        {
-          "method": "GET",
-          "path": "/api/v1/tasks/t00000d"
-        },
-        {
-          "method": "GET",
-          "path": "/api/v1/tasks/t00000d"
-        },
-        {
-          "method": "GET",
-          "path": "/api/v1/user"
-        },
-        {
           "method": "POST",
           "path": "/api/v1/comments",
           "body": {
             "task_id": "t00000d",
-            "content": "Golden comment",
-            "uids_to_notify": [
-              "1234567"
-            ]
+            "content": "Golden comment"
           }
         }
       ],
@@ -1248,7 +1208,7 @@
           "name": "Golden project",
           "color": "grape",
           "parentId": null,
-          "order": 0,
+          "order": 1,
           "isFavorite": false,
           "isInbox": false,
           "isShared": false,
@@ -1279,7 +1239,7 @@
           "name": "golden",
           "color": "teal",
           "isFavorite": false,
-          "order": 0
+          "order": 12
         }
       }
     },
@@ -1292,15 +1252,12 @@
         {
           "method": "DELETE",
           "path": "/api/v1/tasks/t00000f"
-        },
-        {
-          "method": "GET",
-          "path": "/api/v1/tasks/t00000f"
         }
       ],
       "result": {
         "ok": {
-          "ok": true
+          "ok": true,
+          "id": "t00000f"
         }
       }
     }

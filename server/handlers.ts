@@ -2,7 +2,6 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { spawn } from 'node:child_process'
 
 import { DETAIL_DESCRIPTION_CHARS, toJson } from '../src/shared/budget'
-import { priorityLabel } from '../src/shared/colors'
 import type {
   CommentRow,
   ListQuery,
@@ -24,8 +23,11 @@ import {
   compactSection,
   compactTask,
   compactUser,
-  resultsOf,
 } from './compact'
+import { TodoistRequestError, type TodoistApi } from '@doist/todoist-sdk'
+
+import { planFollowUps, type QuickAddIntent } from '../src/shared/quickAddPlan'
+import { api, dropClient, mapApiError, requestId } from './api'
 import { cancelJob, clearFinishedJob, jobStatus, startJob } from './jobs'
 import { locateBrew, locateTd, loginPath, type Located } from './locate'
 import { TdError, runTd } from './run'
@@ -139,8 +141,6 @@ async function td(args: string[], options: { timeoutMs?: number; expectJson?: bo
   }
 }
 
-const ref = (id: string) => `id:${id}`
-
 function requireString(value: unknown, field: string, max = 20_000): string {
   if (typeof value !== 'string' || !value.trim()) throw new TdError('INVALID', `${field} is required.`)
   if (value.length > max) throw new TdError('INVALID', `${field} is too long.`)
@@ -194,11 +194,18 @@ export async function status(params: unknown): Promise<SetupStatus> {
     const info = { path: found.path, version: tdVersion.version, node: null }
     try {
       const user = compactUser(await td(['auth', 'status', '--json'], { timeoutMs: 15_000 }))
-      if (generation === configGeneration) cachedUser = user
+      if (generation === configGeneration) {
+        // A different account (td switched users outside Agent Code) must not
+        // keep using the previous account's token.
+        if (user?.id !== cachedUser?.id) dropClient()
+        cachedUser = user
+      }
+      if (!user) dropClient()
       if (job?.state === 'succeeded') clearFinishedJob()
       return toJson({ state: user ? 'ready' : 'signed-out', td: info, searched, user, error: null, ...base })
     } catch (error) {
       if (error instanceof TdError && (error.code === 'NO_TOKEN' || error.code === 'AUTH')) {
+        dropClient()
         return toJson({ state: 'signed-out', td: info, searched, user: null, error: error.code === 'AUTH' ? error.message : null, ...base })
       }
       throw error
@@ -226,7 +233,7 @@ export async function login(params: unknown): Promise<SetupStatus> {
   // the setup screen can also SHOW it (re-open / copy when the browser tab got
   // lost) — the default path opens a browser we can never point back to.
   const args = ['--no-spinner', 'auth', 'login', '--no-browser-open', ...(p.readOnly === true ? ['--read-only'] : [])]
-  startJob({ kind: 'login', command: found.path, args, env: found.env, onUrl: openExternal, onDone: () => { cachedUser = null } })
+  startJob({ kind: 'login', command: found.path, args, env: found.env, onUrl: openExternal, onDone: () => { cachedUser = null; dropClient() } })
   return status({})
 }
 
@@ -258,6 +265,7 @@ export async function cancel(): Promise<SetupStatus> {
 export async function logout(): Promise<SetupStatus> {
   await td(['auth', 'logout', '--json'])
   cachedUser = null
+  dropClient()
   return status({ refresh: true })
 }
 
@@ -281,268 +289,432 @@ export async function openUrl(params: unknown): Promise<{ ok: true }> {
 }
 
 // ---------------------------------------------------------------------------
+// Talking to Todoist
+//
+// Every read and write below goes through the long-lived SDK client
+// (server/api.ts), inside the request's deadline. td is not spawned on this
+// path at all — that was the measured latency floor (see the plan's
+// "Snappiness evaluation").
+
+/** Run one SDK call (or a small group) for this request. Reads get ONE retry
+ *  on a Todoist 5xx when the deadline allows — the SDK already retries network
+ *  errors, never server errors. Writes are never retried here: they carry an
+ *  X-Request-Id instead (api.ts). */
+async function call<T>(fn: (client: TodoistApi) => Promise<T>, options: { read?: boolean } = {}): Promise<T> {
+  const { located: found } = await resolveTd()
+  if (!found) throw new TdError('TD_NOT_FOUND', 'The Todoist CLI (td) is not installed or could not be found.')
+  const attempt = async () => {
+    const left = Math.min(remainingMs(), 20_000)
+    if (left < 500) throw new TdError('TIMEOUT', 'The request ran out of time.')
+    const client = await api(found, configGeneration)
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      // JSON round trip: the SDK coerces timestamps (completedAt, postedAt…)
+      // to Date objects; compact.ts reads the JSON form td used to print, so
+      // every entity is normalised here, once.
+      return await Promise.race([
+        fn(client).then(value => (value === undefined ? value : JSON.parse(JSON.stringify(value))) as T),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new TdError('TIMEOUT', `Todoist did not answer within ${Math.round(left / 1000)} s.`)), left)
+        }),
+      ])
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+  try {
+    return await attempt()
+  } catch (error) {
+    let mapped = mapApiError(error)
+    const serverError = error instanceof TodoistRequestError && (error.httpStatusCode ?? 0) >= 500
+    if (options.read && serverError && remainingMs() - 300 >= MIN_RETRY_MS) {
+      await new Promise(resolve => setTimeout(resolve, 300))
+      try { return await attempt() } catch (again) { mapped = mapApiError(again) }
+    }
+    if (mapped.code === 'AUTH' || mapped.code === 'NO_TOKEN') { cachedUser = null; dropClient() }
+    throw mapped
+  }
+}
+
+/** The account the service believes it is signed into (what `meta` reports). */
+export function accountUser(): UserRow | null {
+  return cachedUser
+}
+
+const read = <T,>(fn: (client: TodoistApi) => Promise<T>) => call(fn, { read: true })
+
+/** Every page of a cursor-paged collection (projects, labels: the sidebar
+ *  needs all of them; Todoist Pro caps them at a few hundred). */
+async function allPages<T>(page: (cursor: string | null) => Promise<{ results: T[]; nextCursor: string | null }>): Promise<T[]> {
+  const out: T[] = []
+  let cursor: string | null = null
+  for (let i = 0; i < 50; i++) {
+    const result = await page(cursor)
+    out.push(...result.results)
+    cursor = result.nextCursor
+    if (!cursor) break
+  }
+  return out
+}
+
+/** Account facts fetched once per configuration: the Inbox id (Inbox is a
+ *  project query) and saved-filter queries (a filter view needs its query). */
+let inboxId: { generation: number; id: string } | null = null
+const filterQueries = new Map<string, string>()
+
+async function inboxProjectId(): Promise<string> {
+  if (inboxId?.generation === configGeneration) return inboxId.id
+  const user = await read(client => client.getUser())
+  const id = String((user as { inboxProjectId?: unknown }).inboxProjectId ?? '')
+  if (!id) throw new TdError('BAD_OUTPUT', 'Todoist did not report an Inbox project.')
+  inboxId = { generation: configGeneration, id }
+  return id
+}
+
+// ---------------------------------------------------------------------------
 // Reads
 
 export async function meta(): Promise<Meta> {
-  // Sections are NOT fetched here: `td section list` refuses to run without a
-  // project or a search term (td 5.4.10 section/index.js), so an account-wide
-  // list would cost one td process per project. An earlier version called it
-  // without a project, the CLI exited with usage, and a `.catch` turned that
-  // into "no sections" for every user — found by the real-td integration
-  // tests. Views load sections per project through `sections` instead.
+  // Sections load per project through `sections` (views cache them).
   const [projects, labels, filters] = await Promise.all([
-    td(['project', 'list', '--all', '--json', '--full'], { read: true }),
-    td(['label', 'list', '--all', '--json', '--full'], { read: true }).catch(() => ({ results: [] })),
-    // Saved filters are a Pro feature; a free account must still get a sidebar.
-    td(['filter', 'list', '--json', '--full'], { read: true }).catch(() => ({ results: [] })),
+    read(client => allPages(cursor => client.getProjects({ cursor, limit: 200 }))),
+    read(client => allPages(cursor => client.getLabels({ cursor, limit: 200 }))).catch(() => []),
+    // Saved filters live in the Sync API; a free account has none. Never fail
+    // the sidebar over them.
+    read(client => client.sync({ resourceTypes: ['filters'], syncToken: '*' })).then(r => ((r as { filters?: unknown[] }).filters ?? []).filter(f => !(f as { isDeleted?: boolean }).isDeleted), () => []),
   ])
-  const projectRows = compactAll(resultsOf(projects).results, compactProject).sort((a, b) => Number(b.isInbox) - Number(a.isInbox) || a.order - b.order)
+  const filterRows = compactAll(filters, compactFilter)
+  for (const f of filterRows) filterQueries.set(f.id, f.query)
+  const projectRows = compactAll(projects, compactProject).sort((a, b) => Number(b.isInbox) - Number(a.isInbox) || a.order - b.order)
   return toJson({
     projects: projectRows,
     sections: [],
-    labels: compactAll(resultsOf(labels).results, compactLabel).sort((a, b) => a.order - b.order || a.name.localeCompare(b.name)),
-    filters: compactAll(resultsOf(filters).results, compactFilter),
+    labels: compactAll(labels, compactLabel).sort((a, b) => a.order - b.order || a.name.localeCompare(b.name)),
+    filters: filterRows,
     user: cachedUser,
   })
 }
 
 export async function sections(params: unknown) {
   const projectId = requireId(asObject(params).projectId, 'project')
-  const raw = await td(['section', 'list', ref(projectId), '--all', '--json', '--full'], { read: true })
-  return toJson(compactAll(resultsOf(raw).results, compactSection).sort((a, b) => a.order - b.order))
+  const rows = await read(client => allPages(cursor => client.getSections({ projectId, cursor, limit: 200 })))
+  return toJson(compactAll(rows, compactSection).sort((a, b) => a.order - b.order))
 }
 
-/** Local calendar day `offset` days from now, as td's --since expects. */
+/** Local calendar day `offset` days from now, as Todoist's date params expect. */
 function localDay(offset: number): string {
   const d = new Date()
   d.setDate(d.getDate() + offset)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-function listArgs(query: ListQuery): string[] {
-  const page = ['--json', '--full', `--limit=${PAGE_LIMIT}`, ...(query.cursor ? [`--cursor=${query.cursor}`] : [])]
+/** The queries td 5.4.10 builds for `today` and `upcoming 14` (commands/today.js,
+ *  upcoming.js): the same filters, so the lists match what td showed. */
+export const TODAY_QUERY = '(today | overdue) & (assigned to: me | !assigned)'
+export const UPCOMING_QUERY = '(due before: 14 days) & (assigned to: me | !assigned)'
+
+type Page = { results: unknown[]; nextCursor: string | null }
+
+export async function list(params: unknown): Promise<TaskPage> {
+  const query = asObject(params) as ListQuery
+  const cursor = typeof query.cursor === 'string' && query.cursor ? query.cursor : null
+  const limit = PAGE_LIMIT
+  const page = (raw: Page): TaskPage => toJson({ tasks: compactAll(raw.results, item => compactTask(item)), nextCursor: raw.nextCursor, truncated: false })
   switch (query.kind) {
     case 'today':
-      return ['today', ...page]
+      return page(await read(client => client.getTasksByFilter({ query: TODAY_QUERY, cursor, limit })))
     case 'upcoming':
-      // 14 days: a week shows too little on a Monday, a month buries the near term.
-      return ['upcoming', '14', ...page]
-    case 'inbox':
-      return ['inbox', ...page]
-    case 'project':
-      return ['task', 'list', `--project=${ref(requireId(query.id, 'project'))}`, ...page]
-    case 'label':
-      return ['task', 'list', `--label=${requireString(query.query, 'label', 200)}`, ...page]
-    case 'filter':
-      if (query.id) return ['filter', 'view', ref(requireId(query.id, 'filter')), '--json', '--full', `--limit=${FILTER_LIMIT}`, ...(query.cursor ? [`--cursor=${query.cursor}`] : [])]
-      return ['task', 'list', `--filter=${requireString(query.query, 'filter', 1000)}`, ...page]
-    case 'search':
-      // Todoist filter syntax: `search: text` matches content. Commas separate
-      // queries in filter syntax, so strip them from free text.
-      return ['task', 'list', `--filter=search: ${requireString(query.query, 'search', 200).replace(/[,&|]/g, ' ')}`, ...page]
-    case 'completed':
-      // td's default window is TODAY only (since=today, until=tomorrow — seen
-      // in the integration request log). Two weeks matches what people mean by
-      // "what did I finish lately" without paging through months.
-      return ['completed', 'list', `--since=${localDay(-14)}`, ...page]
+      return page(await read(client => client.getTasksByFilter({ query: UPCOMING_QUERY, cursor, limit })))
+    case 'inbox': {
+      const projectId = await inboxProjectId()
+      return page(await read(client => client.getTasks({ projectId, cursor, limit })))
+    }
+    case 'project': {
+      const projectId = requireId(query.id, 'project')
+      return page(await read(client => client.getTasks({ projectId, cursor, limit })))
+    }
+    case 'label': {
+      const label = requireString(query.query, 'label', 200)
+      return page(await read(client => client.getTasks({ label, cursor, limit })))
+    }
+    case 'search': {
+      // `search:` matches content; commas separate queries in filter syntax.
+      const text = requireString(query.query, 'search', 200).replace(/[,&|]/g, ' ')
+      return page(await read(client => client.getTasksByFilter({ query: `search: ${text}`, cursor, limit })))
+    }
+    case 'filter': {
+      if (!query.id) return page(await read(client => client.getTasksByFilter({ query: requireString(query.query, 'filter', 1000), cursor, limit })))
+      const id = requireId(query.id, 'filter')
+      if (!filterQueries.has(id)) await meta()
+      const stored = filterQueries.get(id) ?? (typeof query.query === 'string' ? query.query : '')
+      if (!stored) throw new TdError('INVALID', 'That saved filter no longer exists.')
+      return toJson(await filterPage(stored, cursor))
+    }
+    case 'completed': {
+      // Two weeks: what people mean by "what did I finish lately". Todoist's
+      // default window is today only.
+      const raw = await read(client => client.getCompletedTasksByCompletionDate({ since: localDay(-14), until: localDay(1), cursor, limit }))
+      return page({ results: raw.items, nextCursor: raw.nextCursor })
+    }
     default:
       throw new TdError('INVALID', 'Unknown list.')
   }
 }
 
-export async function list(params: unknown): Promise<TaskPage> {
-  const query = asObject(params) as ListQuery
-  const raw = await td(listArgs(query), { read: true })
-  if (query.kind === 'filter' && query.id) return toJson(filterPage(raw))
-  const { results, nextCursor } = resultsOf(raw)
-  return toJson({ tasks: compactAll(results, item => compactTask(item)), nextCursor, truncated: false })
+/** Split a saved filter's query on its top-level commas: Todoist shows each
+ *  comma-separated query as its own section (td does the same split). Commas
+ *  inside parentheses belong to the query. */
+export function splitFilterQueries(query: string): string[] {
+  const parts: string[] = []
+  let depth = 0
+  let current = ''
+  for (const ch of query) {
+    if (ch === '(') depth++
+    if (ch === ')') depth = Math.max(0, depth - 1)
+    if (ch === ',' && depth === 0) { if (current.trim()) parts.push(current.trim()); current = ''; continue }
+    current += ch
+  }
+  if (current.trim()) parts.push(current.trim())
+  return parts
 }
 
 /**
  * A saved filter's tasks, and whether that is all of them.
  *
- * `td filter view` answers in two shapes: `{results, nextCursor}` for a
- * one-query filter, and `{sections: [{query, results, nextCursor}]}` when the
- * filter has several comma-separated queries. Only the first shape can ever be
- * continued, and only when td kept the API cursor (it drops it when it sorted
- * locally). Anything else that may have more is reported as `truncated`, so the
- * view says "showing the first N" instead of presenting a partial list as
- * complete — the earlier version flattened sections and dropped every cursor.
+ * One query pages normally with Todoist's cursor. Several comma-separated
+ * queries are fetched as sections (up to FILTER_LIMIT each) and merged; a
+ * merged list cannot be continued with one cursor, so if any section has more
+ * the page says `truncated` and the view tells the user — never presenting a
+ * partial list as complete.
  */
-export function filterPage(raw: unknown): TaskPage {
-  const full = (count: number) => count >= FILTER_LIMIT
-  if (raw && typeof raw === 'object' && Array.isArray((raw as { sections?: unknown }).sections)) {
-    const sections = (raw as { sections: Array<{ results?: unknown[]; nextCursor?: unknown }> }).sections
-    const seen = new Set<string>()
-    const tasks: TaskRow[] = []
-    // td deliberately keeps a task that matches two sections in both (Todoist
-    // shows it under each query). The list is keyed by task id, so the second
-    // copy is dropped here; the task is still shown once.
-    for (const section of sections) {
-      for (const task of compactAll(section.results ?? [], item => compactTask(item))) {
-        if (seen.has(task.id)) continue
-        seen.add(task.id)
-        tasks.push(task)
-      }
+export async function filterPage(query: string, cursor: string | null): Promise<TaskPage> {
+  const queries = splitFilterQueries(query)
+  if (queries.length <= 1) {
+    const raw = await read(client => client.getTasksByFilter({ query: queries[0] ?? query, cursor, limit: PAGE_LIMIT }))
+    return { tasks: compactAll(raw.results, item => compactTask(item)), nextCursor: raw.nextCursor, truncated: false }
+  }
+  const sections = await Promise.all(queries.map(q => read(client => client.getTasksByFilter({ query: q, limit: FILTER_LIMIT }))))
+  const seen = new Set<string>()
+  const tasks: TaskRow[] = []
+  // A task matching two sections appears in both in Todoist; the list is keyed
+  // by id, so it is shown once.
+  for (const section of sections) {
+    for (const task of compactAll(section.results, item => compactTask(item))) {
+      if (seen.has(task.id)) continue
+      seen.add(task.id)
+      tasks.push(task)
     }
-    const truncated = sections.some(section => !!section.nextCursor || full(section.results?.length ?? 0))
-    return { tasks, nextCursor: null, truncated }
   }
-  const { results, nextCursor } = resultsOf(raw)
-  return {
-    tasks: compactAll(results, item => compactTask(item)),
-    nextCursor,
-    // Sorted saved filters come back sliced to the limit with no cursor; a
-    // full page without a cursor therefore MAY have more.
-    truncated: !nextCursor && full(results.length),
-  }
+  return { tasks, nextCursor: null, truncated: sections.some(section => !!section.nextCursor) }
 }
 
 export async function task(params: unknown): Promise<TaskDetail> {
   const id = requireId(asObject(params).id)
-  const [raw, comments] = await Promise.all([
-    td(['task', 'view', ref(id), '--json', '--full', '--include-children'], { read: true }),
-    td(['comment', 'list', ref(id), '--json', '--full', '--limit=50'], { read: true }).catch(() => ({ results: [] })),
+  // Three direct reads in parallel — td fetched the task twice and probed every
+  // child for grandchildren (29 requests for 25 children; here: 3).
+  const [raw, children, comments] = await Promise.all([
+    read(client => client.getTask(id)),
+    read(client => allPages(cursor => client.getTasks({ parentId: id, cursor, limit: 200 }))).catch(() => []),
+    read(client => client.getComments({ taskId: id, limit: 50 })).then(r => r.results, () => []),
   ])
   const row = compactTask(raw, DETAIL_DESCRIPTION_CHARS)
-  if (!row) throw new TdError('BAD_OUTPUT', 'td returned no task.')
-  const children = Array.isArray((raw as { children?: unknown }).children) ? (raw as { children: unknown[] }).children : []
+  if (!row) throw new TdError('BAD_OUTPUT', 'Todoist returned no task.')
   return toJson({
     task: row,
     children: compactAll(children, item => compactTask(item)).sort((a, b) => a.order - b.order),
-    comments: compactAll(resultsOf(comments).results, compactComment).sort((a, b) => a.postedAt.localeCompare(b.postedAt)),
+    comments: compactAll(comments, compactComment).sort((a, b) => a.postedAt.localeCompare(b.postedAt)),
   })
 }
 
 // ---------------------------------------------------------------------------
 // Writes
+//
+// Each returns the canonical entity Todoist answered with, so the runtime can
+// publish exactly what changed and views reconcile without refetching lists.
 
 function taskFrom(raw: unknown): TaskRow {
   const row = compactTask(raw, DETAIL_DESCRIPTION_CHARS)
-  if (!row) throw new TdError('BAD_OUTPUT', 'td did not return the task.')
+  if (!row) throw new TdError('BAD_OUTPUT', 'Todoist did not return the task.')
   return toJson(row)
 }
 
-function priorityFlag(value: unknown): string[] {
-  return typeof value === 'number' && value >= 1 && value <= 4 ? [`--priority=${priorityLabel(value)}`] : []
+function priorityValue(value: unknown): number | undefined {
+  return typeof value === 'number' && value >= 1 && value <= 4 ? Math.round(value) : undefined
 }
 
-function labelsValue(value: unknown): string | null {
+function labelsValue(value: unknown): string[] | null {
   if (!Array.isArray(value)) return null
-  return value.filter((l): l is string => typeof l === 'string' && !!l.trim()).map(l => l.replace(/,/g, ' ').trim()).join(',')
+  return value.filter((l): l is string => typeof l === 'string' && !!l.trim()).map(l => l.trim())
+}
+
+/** "45m", "1h30m", "2h" → minutes. */
+export function durationMinutes(value: unknown): number | null {
+  if (typeof value !== 'string') return null
+  const m = /^\s*(?:(\d+)\s*h)?\s*(?:(\d+)\s*m)?\s*$/i.exec(value)
+  if (!m || (!m[1] && !m[2])) return null
+  const minutes = Number(m[1] ?? 0) * 60 + Number(m[2] ?? 0)
+  return minutes > 0 ? minutes : null
+}
+
+/** The SDK's update/add fields from our TaskPatch/TaskDraft. Empty string =
+ *  clear: "no date" is Todoist's own clearing due string, a null deadline
+ *  clears it, an empty label list removes all labels. */
+function taskFields(p: TaskPatch & { content?: unknown }) {
+  const fields: Record<string, unknown> = {}
+  if (p.content !== undefined) fields.content = requireString(p.content, 'Task name', 2000)
+  if (p.description !== undefined) fields.description = String(p.description).slice(0, 16_000)
+  if (p.due !== undefined) fields.dueString = p.due ? String(p.due) : 'no date'
+  if (p.deadline !== undefined) fields.deadlineDate = p.deadline ? String(p.deadline) : null
+  const minutes = p.duration ? durationMinutes(p.duration) : null
+  if (minutes) { fields.duration = minutes; fields.durationUnit = 'minute' }
+  const priority = priorityValue(p.priority)
+  if (priority) fields.priority = priority
+  const labels = p.labels !== undefined ? labelsValue(p.labels) : null
+  if (labels) fields.labels = labels
+  return fields
+}
+
+async function reread(id: string): Promise<TaskRow | null> {
+  try {
+    return taskFrom(await read(client => client.getTask(id)))
+  } catch {
+    return null
+  }
 }
 
 export async function quickAdd(params: unknown): Promise<TaskRow> {
   const text = requireString(asObject(params).text, 'text', 2000)
-  // --stdin: the whole natural-language line goes through stdin, so a title
-  // starting with "-" or containing anything shell-ish is never an argv token.
-  return taskFrom(await td(['task', 'quickadd', '--stdin', '--json'], { stdin: text }))
+  return taskFrom(await call(client => client.quickAddTask({ text })))
+}
+
+/**
+ * Quick add plus the view's/picker's intent, in ONE request.
+ *
+ * The parser runs first (Todoist decides what the text meant), then
+ * planFollowUps (src/shared/quickAddPlan.ts) applies what it did not: today's
+ * date in Today, the open project, picked labels, the agent note. Doing it here
+ * means one change published instead of two or three (each of which made every
+ * view reload — 10 td processes per add in beta.4). A failed follow-up returns
+ * the created task with `partial`, never an error: the task exists and the
+ * caller must not add it again.
+ */
+export async function addWithIntent(params: unknown): Promise<{ task: TaskRow; partial: string | null }> {
+  const p = asObject(params)
+  const text = requireString(p.text, 'text', 2000)
+  const intent = (asObject(p.intent) as QuickAddIntent)
+  if (!intent.inboxId) intent.inboxId = await inboxProjectId().catch(() => null)
+  const created = taskFrom(await call(client => client.quickAddTask({ text })))
+  const plan = planFollowUps(created, intent)
+  let current = created
+  try {
+    if (plan.update) current = taskFrom(await call(client => client.updateTask(created.id, taskFields(plan.update!) as never, requestId())))
+    if (plan.move) current = taskFrom(await call(client => client.moveTask(created.id, plan.move as never, requestId())))
+    return toJson({ task: current, partial: null })
+  } catch (error) {
+    const reason = error instanceof TdError ? error.message.replace(/^[A-Z_]+: /, '') : String(error)
+    return toJson({ task: current, partial: `Added “${created.content}”, but could not ${plan.steps.join(' and ')}. ${reason}` })
+  }
 }
 
 export async function add(params: unknown): Promise<TaskRow> {
   const draft = asObject(params) as TaskDraft
-  const args = ['task', 'add', `--content=${requireString(draft.content, 'Task name', 2000)}`, '--json']
-  if (draft.description) args.push(`--description=${String(draft.description).slice(0, 16_000)}`)
-  if (draft.due) args.push(`--due=${draft.due}`)
-  if (draft.deadline) args.push(`--deadline=${draft.deadline}`)
-  if (draft.duration) args.push(`--duration=${draft.duration}`)
-  args.push(...priorityFlag(draft.priority))
+  const fields: Record<string, unknown> = { ...taskFields(draft), content: requireString(draft.content, 'Task name', 2000) }
+  if (fields.dueString === 'no date') delete fields.dueString
+  if (fields.deadlineDate === null) delete fields.deadlineDate
   const projectId = optionalId(draft.projectId)
   const sectionId = optionalId(draft.sectionId)
   const parentId = optionalId(draft.parentId)
-  if (projectId) args.push(`--project=${ref(projectId)}`)
-  if (sectionId) args.push(`--section=${ref(sectionId)}`)
-  if (parentId) args.push(`--parent=${ref(parentId)}`)
-  const labels = labelsValue(draft.labels)
-  if (labels) args.push(`--labels=${labels}`)
-  return taskFrom(await td(args))
+  if (projectId) fields.projectId = projectId
+  if (sectionId) fields.sectionId = sectionId
+  if (parentId) fields.parentId = parentId
+  return taskFrom(await call(client => client.addTask(fields as never, requestId())))
 }
 
 export async function update(params: unknown): Promise<TaskRow> {
   const p = asObject(params) as TaskPatch & { id?: unknown }
   const id = requireId(p.id)
-  const args = ['task', 'update', ref(id), '--json']
-  if (p.content !== undefined) args.push(`--content=${requireString(p.content, 'Task name', 2000)}`)
-  if (p.description !== undefined) args.push(`--description=${String(p.description).slice(0, 16_000)}`)
-  // Empty string = clear. td has explicit --no-* flags for that; an empty
-  // `--due=` would be sent to the API as due_string "" with undefined results.
-  if (p.due !== undefined) args.push(p.due ? `--due=${p.due}` : '--no-due')
-  if (p.deadline !== undefined) args.push(p.deadline ? `--deadline=${p.deadline}` : '--no-deadline')
-  if (p.duration !== undefined && p.duration) args.push(`--duration=${p.duration}`)
-  args.push(...priorityFlag(p.priority))
-  if (p.labels !== undefined) {
-    const labels = labelsValue(p.labels)
-    args.push(labels ? `--labels=${labels}` : '--no-labels')
-  }
-  if (args.length === 4) throw new TdError('INVALID', 'Nothing to update.')
-  return taskFrom(await td(args))
+  const fields = taskFields(p)
+  // An empty label list is a real change (remove all labels).
+  if (p.labels !== undefined && Array.isArray(p.labels) && !fields.labels) fields.labels = []
+  if (!Object.keys(fields).length) throw new TdError('INVALID', 'Nothing to update.')
+  return taskFrom(await call(client => client.updateTask(id, fields as never, requestId())))
 }
 
-export async function move(params: unknown): Promise<{ ok: true }> {
+export async function move(params: unknown): Promise<{ ok: true; task: TaskRow | null }> {
   const p = asObject(params)
-  const args = ['task', 'move', ref(requireId(p.id)), '--json']
+  const id = requireId(p.id)
   const projectId = optionalId(p.projectId)
   const sectionId = optionalId(p.sectionId)
   const parentId = optionalId(p.parentId)
-  if (projectId) args.push(`--project=${ref(projectId)}`)
-  if (sectionId) args.push(`--section=${ref(sectionId)}`)
-  else if (p.noSection === true) args.push('--no-section')
-  if (parentId) args.push(`--parent=${ref(parentId)}`)
-  else if (p.noParent === true) args.push('--no-parent')
-  if (args.length === 4) throw new TdError('INVALID', 'Nowhere to move to.')
-  await td(args)
-  return { ok: true }
+  // Todoist's move takes exactly one destination. "No section" / "no parent"
+  // = the project root.
+  const target = sectionId ? { sectionId } : parentId ? { parentId } : projectId ? { projectId } : null
+  if (!target) throw new TdError('INVALID', 'Nowhere to move to.')
+  const raw = await call(client => client.moveTask(id, target as never, requestId()))
+  return toJson({ ok: true, task: compactTask(raw, DETAIL_DESCRIPTION_CHARS) })
 }
 
-export async function complete(params: unknown): Promise<{ ok: true }> {
-  await td(['task', 'complete', ref(requireId(asObject(params).id)), '--json'])
-  return { ok: true }
+/** Complete, then read the task back: a recurring task rolls to its next date
+ *  (still open), a normal one comes back `completedAt` — the runtime publishes
+ *  whichever is true, so no view has to refetch to find out. */
+export async function complete(params: unknown): Promise<{ ok: true; task: TaskRow | null }> {
+  const id = requireId(asObject(params).id)
+  await call(client => client.closeTask(id, requestId()))
+  return toJson({ ok: true, task: await reread(id) })
 }
 
-export async function uncomplete(params: unknown): Promise<{ ok: true }> {
-  await td(['task', 'uncomplete', ref(requireId(asObject(params).id)), '--json'])
-  return { ok: true }
+export async function uncomplete(params: unknown): Promise<{ ok: true; task: TaskRow | null }> {
+  const id = requireId(asObject(params).id)
+  await call(client => client.reopenTask(id, requestId()))
+  return toJson({ ok: true, task: await reread(id) })
 }
 
-export async function remove(params: unknown): Promise<{ ok: true }> {
-  await td(['task', 'delete', ref(requireId(asObject(params).id)), '--yes', '--json'])
-  return { ok: true }
+export async function remove(params: unknown): Promise<{ ok: true; id: string }> {
+  const id = requireId(asObject(params).id)
+  await call(client => client.deleteTask(id, requestId()))
+  return { ok: true, id }
 }
 
 export async function comment(params: unknown): Promise<CommentRow> {
   const p = asObject(params)
-  const raw = await td(['comment', 'add', ref(requireId(p.taskId, 'task')), `--content=${requireString(p.content, 'Comment', 15_000)}`, '--json'])
-  const row = compactComment(raw)
-  if (!row) throw new TdError('BAD_OUTPUT', 'td did not return the comment.')
+  const taskId = requireId(p.taskId, 'task')
+  const content = requireString(p.content, 'Comment', 15_000)
+  const row = compactComment(await call(client => client.addComment({ taskId, content }, requestId())))
+  if (!row) throw new TdError('BAD_OUTPUT', 'Todoist did not return the comment.')
   return toJson(row)
 }
 
+const colorValue = (value: unknown) => (typeof value === 'string' && /^[a-z_]{2,20}$/.test(value) ? value : undefined)
+
 export async function createProject(params: unknown) {
   const p = asObject(params)
-  const args = ['project', 'create', `--name=${requireString(p.name, 'Project name', 120)}`, '--json']
-  if (typeof p.color === 'string' && /^[a-z_]{2,20}$/.test(p.color)) args.push(`--color=${p.color}`)
+  const fields: Record<string, unknown> = { name: requireString(p.name, 'Project name', 120) }
+  const color = colorValue(p.color)
+  if (color) fields.color = color
   const parentId = optionalId(p.parentId)
-  if (parentId) args.push(`--parent=${ref(parentId)}`)
-  if (p.favorite === true) args.push('--favorite')
-  const row = compactProject(await td(args))
-  if (!row) throw new TdError('BAD_OUTPUT', 'td did not return the project.')
+  if (parentId) fields.parentId = parentId
+  if (p.favorite === true) fields.isFavorite = true
+  const row = compactProject(await call(client => client.addProject(fields as never, requestId())))
+  if (!row) throw new TdError('BAD_OUTPUT', 'Todoist did not return the project.')
   return toJson(row)
 }
 
 export async function createSection(params: unknown) {
   const p = asObject(params)
-  const raw = await td(['section', 'create', `--name=${requireString(p.name, 'Section name', 120)}`, `--project=${ref(requireId(p.projectId, 'project'))}`, '--json'])
-  const row = compactSection(raw)
-  if (!row) throw new TdError('BAD_OUTPUT', 'td did not return the section.')
+  const name = requireString(p.name, 'Section name', 120)
+  const projectId = requireId(p.projectId, 'project')
+  const row = compactSection(await call(client => client.addSection({ name, projectId }, requestId())))
+  if (!row) throw new TdError('BAD_OUTPUT', 'Todoist did not return the section.')
   return toJson(row)
 }
 
 export async function createLabel(params: unknown) {
   const p = asObject(params)
-  const args = ['label', 'create', `--name=${requireString(p.name, 'Label name', 60).replace(/^@/, '')}`, '--json']
-  if (typeof p.color === 'string' && /^[a-z_]{2,20}$/.test(p.color)) args.push(`--color=${p.color}`)
-  const row = compactLabel(await td(args))
-  if (!row) throw new TdError('BAD_OUTPUT', 'td did not return the label.')
+  const fields: Record<string, unknown> = { name: requireString(p.name, 'Label name', 60).replace(/^@/, '').trim() }
+  const color = colorValue(p.color)
+  if (color) fields.color = color
+  const row = compactLabel(await call(client => client.addLabel(fields as never, requestId())))
+  if (!row) throw new TdError('BAD_OUTPUT', 'Todoist did not return the label.')
   return toJson(row)
 }
 
@@ -558,6 +730,7 @@ export const handlers = {
   list,
   task,
   quickAdd,
+  addWithIntent,
   add,
   update,
   move,

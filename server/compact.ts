@@ -11,10 +11,11 @@ import type {
   UserRow,
 } from '../src/shared/types'
 
-// td `--json --full` entities → the compact Row types the bridge carries.
+// @doist/todoist-sdk entities → the compact Row types the bridge carries.
 //
 // Input shape = @doist/todoist-sdk 15.3.1 entities after JSON serialisation
-// (camelCase; Date fields become ISO strings). tests/compact.test.mjs builds its
+// (camelCase; Date fields become ISO strings) — exactly what td `--json --full`
+// printed, and what server/handlers.ts call() produces from the SDK client. tests/compact.test.mjs builds its
 // inputs by running the SDK's OWN test defaults through the SDK's zod schemas
 // and JSON.stringify, i.e. byte-for-byte what td prints.
 //

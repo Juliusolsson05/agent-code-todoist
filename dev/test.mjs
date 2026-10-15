@@ -2,8 +2,9 @@
 // Skitgubbe pattern. esbuild (already used by Vite) strips types; no ts-node,
 // no fake DOM, and the shipped dist/ stays untouched. npm packages stay
 // external so tests load the real @doist/todoist-sdk from node_modules.
-import { spawnSync } from 'node:child_process'
-import { mkdirSync } from 'node:fs'
+import { execFileSync, spawnSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { mkdtemp, readdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 
@@ -39,7 +40,15 @@ try {
   // TEST_NAME_PATTERN=… runs only matching tests (e.g. one UI case while
   // mutation-checking it); the suites are too slow to rerun whole each time.
   const only = process.env.TEST_NAME_PATTERN ? [`--test-name-pattern=${process.env.TEST_NAME_PATTERN}`] : []
-  const result = spawnSync(process.execPath, ['--test', ...concurrency, ...only, ...files.map(f => join(out, f))], { stdio: 'inherit' })
+  // The service now talks to Todoist IN-PROCESS (the SDK), not only through
+  // td child processes. Node reads NODE_EXTRA_CA_CERTS once, at start-up, so
+  // the interception CA must exist BEFORE the test process starts; the
+  // interceptor (tests/support/interceptor.mjs) signs its leaf with it.
+  const caDir = mkdtempSync(join(tmpdir(), 'todoist-test-ca-'))
+  execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', 'ca.key', '-out', 'ca.pem', '-days', '2', '-subj', '/CN=agent-code-todoist test CA'], { cwd: caDir, stdio: 'pipe' })
+  const env = { ...process.env, TODOIST_TEST_CA_DIR: caDir, NODE_EXTRA_CA_CERTS: join(caDir, 'ca.pem') }
+  const result = spawnSync(process.execPath, ['--test', ...concurrency, ...only, ...files.map(f => join(out, f))], { stdio: 'inherit', env })
+  await rm(caDir, { recursive: true, force: true })
   process.exitCode = result.status ?? 1
 } finally {
   await rm(out, { recursive: true, force: true })

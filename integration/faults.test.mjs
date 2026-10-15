@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { after, before, test } from 'node:test'
 
 import * as h from '../server/handlers.ts'
-import { INVOKE_BUDGET_MS } from '../server/handlers.ts'
+import { INVOKE_BUDGET_MS, withinBudget } from '../server/handlers.ts'
 import { invoke } from '../server/invoke.ts'
 import { tdErrorCode, tdErrorMessage } from '../src/shared/types.ts'
 import { seed } from '../tests/support/scenario.mjs'
@@ -101,6 +101,33 @@ test('a slow failing read cannot outlive the host’s 30 s: retry only within th
   }
 })
 
+test('a hanging API is cut at the REQUEST deadline, not at a fixed 20 s', { timeout: 30_000 }, async () => {
+  world.fake.fail(r => r.path === '/api/v1/tasks/filter', { status: 200, body: { results: [], next_cursor: null }, delayMs: 10_000, times: 1 })
+  const started = Date.now()
+  try {
+    assert.equal(await code(withinBudget(() => h.list({ kind: 'today' }), 3_000)), 'TIMEOUT')
+    assert.ok(Date.now() - started < 4_500, `cut near the 3 s budget (${Date.now() - started} ms)`)
+  } finally {
+    world.fake.faults.length = 0
+  }
+})
+
+test('a slow 5xx is not retried when the request has no time left; a fast one is', { timeout: 30_000 }, async () => {
+  const filter = () => world.fake.requestsTo('GET', '/api/v1/tasks/filter').length
+  world.fake.fail(r => r.path === '/api/v1/tasks/filter', { status: 503, body: { error: 'busy' }, delayMs: 2_000, times: 2 })
+  let before = filter()
+  try {
+    assert.equal(await code(withinBudget(() => h.list({ kind: 'today' }), 6_000)), 'TD_FAILED')
+    assert.equal(filter() - before, 1, 'only ~4 s were left: below the 5 s a retry needs')
+  } finally {
+    world.fake.faults.length = 0
+  }
+  world.fake.fail(r => r.path === '/api/v1/tasks/filter', { status: 503, body: { error: 'busy' }, times: 1 })
+  before = filter()
+  assert.equal(await code(withinBudget(() => h.list({ kind: 'today' }), 20_000)), 'resolved')
+  assert.equal(filter() - before, 2, 'retried once and succeeded')
+})
+
 test('a 404 for a task deleted elsewhere is an error, not a crash', async () => {
   assert.notEqual(await code(h.task({ id: 'gone12345' })), 'resolved')
 })
@@ -111,11 +138,16 @@ test('a malformed API response becomes a typed error', async () => {
   // the sidebar must still load.
   const meta = await h.meta({})
   assert.ok(meta.projects.length > 0)
-  // times: 2 — the service retries a failed read once, so the fault has to
-  // outlast the retry to reach the caller.
-  world.fake.fail(r => r.path === '/api/v1/tasks/filter', { status: 200, body: { results: 'not-a-list' }, times: 2 })
-  const result = await code(h.list({ kind: 'today' }))
-  assert.ok(['TD_FAILED', 'BAD_OUTPUT'].includes(result), result)
+  // Only a Todoist 5xx is retried; a malformed 200 is not, so one fault
+  // reaches the caller. Cleared in `finally` either way: a leftover fault once
+  // made the next test's "hang" resolve in 13 ms and pass for the wrong reason.
+  world.fake.fail(r => r.path === '/api/v1/tasks/filter', { status: 200, body: { results: 'not-a-list' }, times: 1 })
+  try {
+    const result = await code(h.list({ kind: 'today' }))
+    assert.ok(['TD_FAILED', 'BAD_OUTPUT'].includes(result), result)
+  } finally {
+    world.fake.faults.length = 0
+  }
 })
 
 test('fields the API adds later are ignored and missing optional ones are tolerated', async () => {
@@ -141,8 +173,8 @@ test('a hanging API is cut at our 20 s deadline, before the host kills the servi
   try {
     const result = await code(h.list({ kind: 'today' }))
     const elapsed = Date.now() - started
-    assert.ok(['TIMEOUT', 'TD_FAILED'].includes(result), result)
-    assert.ok(elapsed < 25_000, `took ${elapsed} ms`)
+    assert.equal(result, 'TIMEOUT')
+    assert.ok(elapsed > 15_000 && elapsed < 25_000, `cut at our 20 s cap (${elapsed} ms)`)
   } finally {
     world.fake.faults.length = 0
   }

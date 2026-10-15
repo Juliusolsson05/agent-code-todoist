@@ -206,6 +206,24 @@ test('a due string Todoist cannot parse is a typed failure, not a silent "today"
   assert.equal(task(id).due.date, dayFromToday(1), 'the old date is kept')
 })
 
+test('addWithIntent: the parser plus the view\'s intent in one service request', async () => {
+  const result = await h.addWithIntent({ text: 'Plan sprint // with notes', intent: { due: 'today', projectId: s.home.id } })
+  assert.equal(result.partial, null)
+  const t = task(result.task.id)
+  assert.equal(t.description, 'with notes')
+  assert.equal(t.due.date, dayFromToday(0))
+  assert.equal(t.project_id, s.home.id)
+  assert.equal(result.task.projectId, s.home.id, 'the returned row is the final state, not the parser\'s')
+})
+
+test('addWithIntent reports a failed follow-up as partial, never as an error', async () => {
+  world.fake.fail(r => r.method === 'POST' && /\/move$/.test(r.path), { status: 500, times: 1 })
+  const before = world.fake.tasks.length
+  const result = await h.addWithIntent({ text: 'Half in one', intent: { projectId: s.home.id } })
+  assert.match(result.partial, /could not move it/)
+  assert.equal(world.fake.tasks.length, before + 1)
+})
+
 test('no write reached an endpoint the fake does not model', () => {
   assert.deepEqual(world.fake.unhandled, [])
   assert.ok(world.fake.tasks.some(t => t.due?.date === due(1).date))

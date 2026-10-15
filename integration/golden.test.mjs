@@ -10,7 +10,7 @@ import { seed } from '../tests/support/scenario.mjs'
 import { startWorld } from '../tests/support/world.mjs'
 
 // Saved payload transcript: for one fixed scenario, every UI operation's
-// exact API traffic (what td sends Todoist) and the rows our service returns,
+// exact API traffic (what the service's SDK client sends Todoist) and the rows our service returns,
 // committed under tests/fixtures/golden/. It turns "we bumped td" or "Doist
 // changed the spec" into a reviewable diff instead of a silent behaviour
 // change.
@@ -20,7 +20,7 @@ import { startWorld } from '../tests/support/world.mjs'
 // Volatile values are normalised: relative calendar days become <day±n>,
 // wall-clock timestamps <now>, so the file is stable across runs and dates.
 
-const FILE = join(__PROJECT_ROOT__, 'tests/fixtures/golden/td-5.4.10.json')
+const FILE = join(__PROJECT_ROOT__, 'tests/fixtures/golden/service-api-v1.json')
 const TD_VERSION = '5.4.10'
 
 let world
@@ -37,13 +37,17 @@ function normalise(value) {
     if (typeof v !== 'string') return v
     let out = v
     // Timestamps produced at run time (posted_at, completed_at) → <now>.
-    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(out) && Math.abs(Date.parse(out) - Date.now()) < 3_600_000) return '<now>'
+    // Only zoned ones (…Z / ±hh:mm): those are what the server stamps. A
+    // FLOATING datetime like a task due "today 09:30" is fixture data, and
+    // matching it by closeness to the clock made the file depend on the hour
+    // it was recorded in (seen when re-recording at 09:3x).
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/.test(out) && Math.abs(Date.parse(out) - Date.now()) < 3_600_000) return '<now>'
     for (const [day, token] of days) out = out.split(day).join(token)
     return out
   })
 }
 
-test('the recorded transcript matches what td and the service do today', async () => {
+test('the recorded transcript matches what the service sends Todoist today', async () => {
   const operations = [
     ['meta', {}],
     ['sections', { projectId: s.work.id }],
