@@ -439,6 +439,97 @@ React is bundled once, and there are no host remounts or resize loops.
 
 The resulting direction is in "Rebuild for feel" below. It is pending the owner's decisions.
 
+## Rebuild for feel (owner: "yes go with all of these", 2026-10-15)
+
+Decisions, all owner-confirmed:
+- **A.** The service talks to the Todoist API directly through `@doist/todoist-sdk`, with one long-lived client.
+  `td` is kept for locating the binary, sign-in, sign-out, `auth status`, and handing over the token.
+- **B.** Match Todoist's own app as closely as the frame allows.
+- **C.** Rebuild in this PR and ship it as beta.5.
+
+### Service (`server/`)
+- `server/api.ts` owns the client.
+  - **Token.** Read `TODOIST_API_TOKEN` from td's environment if set. Otherwise read stdout of
+    `td auth token view` through a private raw spawn; its failures are sanitized and never echo stdout.
+  - **Client.** `new TodoistApi(token, { customFetch })`, where `customFetch` aborts at the request deadline
+    (`INVOKE_BUDGET_MS` scope).
+  - **Cache.** The client is cached per configuration generation. It is cleared on logout, on an AUTH error, on
+    an identity or td-path change, and when status reports signed-out.
+  - **Secrecy.** The token never leaves the service: no RPC reply, no storage, no argv, no error text.
+- **Writes** pass a fresh `requestId` (X-Request-Id). The SDK retries network errors 3 times, and Todoist drops
+  duplicate request ids, so a retried write cannot apply twice.
+- **Errors.** `mapSdkError`: 401/403 → AUTH; abort or deadline → TIMEOUT; network → TD_FAILED; other 4xx/5xx →
+  TD_FAILED with Todoist's message.
+- **Reads.** Every read keeps its RPC shape (`TaskPage`, `Meta`, `TaskDetail`, …).
+  - Today: `getTasksByFilter('(today | overdue) & (assigned to: me | !assigned)')`.
+  - Upcoming: `getTasksByFilter('(due before: 14 days) & (assigned to: me | !assigned)')`.
+  - Inbox: `getTasks({projectId: inbox})`, where inbox is `getUser().inboxProjectId`, cached.
+  - Project: `getTasks({projectId})`. Label: `getTasks({label})`.
+  - Filter: the stored query, split on top-level commas, each section paged.
+  - Search: `getTasksByFilter('search: …')`.
+  - Completed: `getCompletedTasksByCompletionDate(14 days)`.
+  - Meta: projects and labels, all pages, plus filters through `sync(['filters'])`.
+  - Sections: `getSections`.
+  - Task detail: `getTask` + `getTasks({parentId})` + `getComments({taskId})`, run in parallel.
+- **Writes return canonical entities.**
+  - `complete` returns `{task}`, re-read after the close: a recurring task rolls forward, a finished one is
+    `checked`. `delete` and `uncomplete` return the id or the task.
+  - `addWithIntent({text, intent})` runs the quick-add parser, then `planFollowUps` inside ONE invoke, so there
+    is one change and one publish. It returns `{task, partial?}`.
+
+### Runtime (`src/runtime.ts`)
+- **Change feed.** Every mutation publishes small typed changes, `{seq, kind: 'upsert'|'remove'|'meta', task?, id?,
+  reason?}`, in `HostState.changes`, which keeps the last 50. Views apply the changes after their last seen
+  `seq`. If they have fallen out of the window, they revalidate.
+- **Revisions.** `revision` now bumps only for an identity change, an explicit refresh, or the periodic
+  external-change sync (every 60 s while a view is open). `metaRevision` bumps only for project, label or
+  section mutations and for identity changes.
+- **Caches.** Meta and the last page of every list query are cached in the runtime and invalidated by the
+  changes above. A view gets a cached reply at once (`list` with `cached: true`) and revalidates quietly.
+  - Today, Inbox, Upcoming and meta are prefetched once setup is ready, so the first open paints from cache.
+
+### Views (`src/ui/`)
+- **`store.ts`**, one per frame, read through `useSyncExternalStore`:
+  - an entity map of tasks;
+  - query results keyed by the view's key: ids, cursor, `truncated`, and `state` ('empty' | 'fresh' | 'stale');
+  - an optimistic overlay per task, plus a hidden set for completing and deleted tasks;
+  - a per-task write queue: writes to one task are serialized, and unsent field edits are coalesced.
+- **Membership.** Changes are applied with predicates that mirror the server queries:
+  - Today: due ≤ today and not completed. Upcoming: due < today + 14 days.
+  - Inbox and project: projectId. Label: labels contain it. Completed: the completed tasks list.
+  - Search and saved filters cannot be matched locally: they update rows in place, remove completed or deleted
+    ones, and revalidate.
+- **Optimistic everything, reconciled from what the server returns.**
+  - Complete: the check animates, the row collapses, the toast appears at click time with Undo, and focus moves
+    to the next row.
+  - Undo restores the row at once.
+  - Reschedule from the presets, priority, move, delete, edit, quick add: a pending row appears at Enter.
+- **Quiet revalidation.** Nothing hides or spins during it. The first load of a view shows a skeleton only after
+  150 ms without a cache.
+- **Task view.** A Todoist-style task modal over the list, so nothing reflows. It is seeded from the row and
+  renders at once; comments and sub-tasks load into place. It is not remounted per task, and its detail requests
+  are coalesced while j/k is held.
+- **Smaller fixes:**
+  - stable row callbacks;
+  - FLIP animation for reorders;
+  - toasts at the bottom left, with merged completions and an exit animation;
+  - "+ Add task" inline editors at the bottom of the list and of each section, as in Todoist;
+  - comment and sub-task drafts captured at submit;
+  - submit guards on every create;
+  - comments upserted by id.
+- **Quick Add modal:** a real 600 px width, and pickers rendered in flow inside the modal so nothing is clipped.
+- **Workspace modal:** a natural size of 960×640 (scale 1 from about 1070×745).
+
+### Verification
+- The existing unit, integration and UI suites still pass. Assertions that were about td's argv move to the
+  API-request level; the golden transcript is re-recorded and reviewed.
+- New UI cases cover:
+  - optimistic completion with no snap-back, plus Undo;
+  - view switching from the cache with no empty-state flash;
+  - a task modal seeded from the row;
+  - each race found by evaluator 5.
+- The timing probe from evaluator 2 is re-run, and the before/after table goes into the PR.
+
 ## Execution notes
 
 - 2026-10-14: plan committed first; implementation landed in one pass. Owner asked mid-build to follow the Agent
