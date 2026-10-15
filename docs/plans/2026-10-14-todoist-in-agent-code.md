@@ -391,6 +391,54 @@ Both reviewers gave the verdict FIX-BEFORE-MERGE. Every finding was checked agai
   Ruling: a boolean, not a theme picker — Agent Code settings have no enum type — cost: none for two choices.
   Ruling: priority colours become CSS variables because Todoist's dark priorities differ (#ff7066 etc.).
 
+## Snappiness evaluation (2026-10-15, seven evaluators, verified, do not re-derive)
+
+The owner reported that the UI "is glitchy and does not feel snappy" and is "half assed compared to the vision".
+Seven evaluators (Codex 1/3/5/7, Claude 2/4/6) measured beta.4 (`b1a0651`) through the real harness. Their reports are
+in `.worktrees/eval-briefs/report-*.md`, which is git-ignored, with probes under `/tmp`. The causes agree across reports:
+
+1. **One fresh `td` process per request.** A `td` call costs about 220–360 ms before its first HTTP request.
+   A warm `@doist/todoist-sdk` client making the same Today call took 4.4 ms median (eval 3). `td` also adds
+   lookups: a GET before every write, `/user` before Inbox, and a re-GET of the task for comments.
+   A detail view with 25 children costs 29 HTTP requests through `td`, against 3 through the SDK.
+2. **Every mutation refetches everything.** One global `revision` makes each view reload the list, `meta`
+   (3 `td` processes), sections, and an open drawer. Completing one row costs 5 `td` processes and 7 HTTP requests.
+   Quick add in Today costs 10 and 13. With pane + modal + Quick Add open, one completion costs 12 `td` processes
+   (evals 2, 3, 6, 7).
+3. **Optimism is incomplete or wrong.**
+   - Completion clears its marker after a 650 ms timer, so the row shows unchecked again before it leaves.
+     This lasts up to 1.8 s with fast clicks (evals 2, 4, 5, 6).
+   - Undo removes the row first and only then brings it back.
+   - Quick add, reschedule and move wait for the server.
+   - The drawer opens on a skeleton, even though the row already has its data, and re-skeletons on every j/k.
+4. **Visible churn.** One `loading` flag hides the count, spins Refresh and hides "Add section" on every background
+   refetch. Each view switch flashes the empty state and "0", then a skeleton, then rows: there is no per-view cache.
+   Projects render flat, then regroup. A priority change reorders the list without motion.
+5. **Races.**
+   - A held j with the drawer open starts 15 detail RPCs.
+   - Quick add steals focus back after it finishes.
+   - The comment and sub-task forms clear the next draft.
+   - A stale detail response overwrites a newer edit.
+   - A failed patch's recovery loads the old view into the new one (same bug as the delete case).
+   - Load more cancels the reconciling refresh.
+   - Writes to the same task can land out of order.
+   - A comment appears twice.
+   - Add section can be submitted twice (eval 5).
+6. **Render waste.** The inline `onOpen`, `onFocus` and `onDelete` callbacks defeat `TaskItem.memo`, so all N rows
+   render on every j. Stable callbacks cut row renders by 99% (eval 1). Virtualization is not needed at 300 tasks.
+7. **Host and frame.**
+   - Quick Add's `width:min(620px,100vw)` is circular in an intrinsically sized modal. It renders 300×150, and its
+     pickers are clipped by 45–58%.
+   - The 1100×720 workspace modal is scaled down on small windows, so text is about 10 px at 900 px wide.
+   - The modal reveals large → tiny → final.
+   - Bridge IPC itself is cheap, about 1 ms simulated (eval 7).
+   Host issues to file: preferred or responsive modal sizing, and not revealing a frame before its first size.
+
+What was fine: quick-add typing is local, hover is pure CSS, popovers don't jump, styles are injected once,
+React is bundled once, and there are no host remounts or resize loops.
+
+The resulting direction is in "Rebuild for feel" below. It is pending the owner's decisions.
+
 ## Execution notes
 
 - 2026-10-14: plan committed first; implementation landed in one pass. Owner asked mid-build to follow the Agent
